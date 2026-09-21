@@ -58,10 +58,6 @@ textarea{resize:vertical;min-height:56px;line-height:1.35}
 .timewrap{display:flex;align-items:center;gap:6px}
 .timewrap input{max-width:90px;text-align:center}
 .timewrap span{color:var(--muted);font-weight:700}
-input[type=time].timepick{max-width:150px;min-width:118px;text-align:left;padding:9px 10px;
-  font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
-  font-family:inherit;outline:none}
-input[type=time].timepick:focus{border-color:var(--bordeaux)}
 .chk{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:14px}
 .chk input{width:20px;height:20px;accent-color:var(--bordeaux);flex:0 0 auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
@@ -369,16 +365,10 @@ function renderChoice(ds,c){
 }
 function timeInput(ds,hhRole,mmRole){
   const w=el("div","timewrap");
-  const i=el("input");i.type="time";i.step="60";i.className="timepick";
-  const hh=ds[hhRole],mm=ds[mmRole];
-  if(hh!==undefined&&hh!==""){
-    i.value=two(parseInt(hh,10)||0)+":"+two((mm!==undefined&&mm!=="")?(parseInt(mm,10)||0):0);
-  }
-  const apply=()=>{const val=i.value;
-    if(!val){ds[hhRole]="";ds[mmRole]="";}
-    else{const p=val.split(":");ds[hhRole]=String(parseInt(p[0],10)||0);ds[mmRole]=two(parseInt(p[1]||"0",10)||0);}
-    markDirty();};
-  i.onchange=apply;i.oninput=apply;
+  const i=el("input");i.type="text";i.inputMode="numeric";i.setAttribute("pattern","[0-9]*");i.autocomplete="off";i.placeholder="hh:mm";i.style.maxWidth="120px";
+  const v=(ds[hhRole]||ds[mmRole])?((ds[hhRole]||"")+(ds[mmRole]?("h"+ds[mmRole]):"")):"";
+  i.value=v;
+  i.oninput=()=>{const p=parseTime(i.value);ds[hhRole]=p.hh;ds[mmRole]=p.mm;markDirty();};
   w.appendChild(i);
   return w;
 }
