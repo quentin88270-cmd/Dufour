@@ -62,6 +62,13 @@ input[type=time].timepick{max-width:150px;min-width:118px;text-align:left;paddin
   font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
   font-family:inherit;outline:none}
 input[type=time].timepick:focus{border-color:var(--bordeaux)}
+.vehrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);
+  border-radius:10px;margin:6px 0;background:#fbfaf8;font-size:13px}
+.vehrow .vinfo{flex:1;min-width:0}
+.vehrow .vinfo b{color:var(--ink)}
+.vehrow .vtype{font-size:10px;font-weight:800;color:#fff;background:var(--bordeaux);border-radius:20px;padding:2px 8px}
+.vehrow .vdel{border:none;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px}
+select.dayveh{max-width:100%;font-weight:600;color:var(--bordeaux);border-color:var(--line)}
 .chk{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:14px}
 .chk input{width:20px;height:20px;accent-color:var(--bordeaux);flex:0 0 auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
@@ -134,26 +141,35 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
 <div class="wrap">
 
-  <!-- IDENTITÉ + SEMAINE -->
-  <div class="card open" id="card-head">
-    <div class="hd" data-toggle>Identité &amp; semaine <span class="chev">▶</span></div>
+  <!-- MON PROFIL -->
+  <div class="card" id="card-profile">
+    <div class="hd" data-toggle>👤 Mon profil <span class="chev">▶</span></div>
     <div class="bd">
-      <p class="hint" style="margin-top:0">Renseigne ton identité une fois : elle est mémorisée sur ce téléphone et reportée en haut de la feuille.</p>
+      <p class="hint" style="margin-top:0">Enregistré automatiquement sur cet appareil — conservé même après fermeture de l'appli. Reporté en haut de la feuille.</p>
       <div class="row">
         <div class="col"><label class="fl">Nom</label><input type="text" id="id_nom" placeholder="Ton nom" autocomplete="family-name"></div>
         <div class="col"><label class="fl">Prénom</label><input type="text" id="id_prenom" placeholder="Ton prénom" autocomplete="given-name"></div>
       </div>
       <label class="fl">Adresse (ligne 1)</label><input type="text" id="id_adr1" placeholder="N° et rue" autocomplete="address-line1">
       <label class="fl">Adresse (ligne 2)</label><input type="text" id="id_adr2" placeholder="Code postal et ville" autocomplete="address-line2">
-      <div class="subttl" style="margin-top:14px">Mon véhicule (par défaut)</div>
-      <p class="hint" style="margin-top:0">Reporté automatiquement sur les déplacements pro et l'activité. Modifiable au jour le jour.</p>
-      <div class="row">
-        <div class="col"><label class="fl">Machine / engin</label><input type="text" id="veh_machine" placeholder="ex. ATF 40G2"></div>
-        <div class="col"><label class="fl">N° plaque</label><input type="text" id="veh_plaque" placeholder="ex. GT-990-PT"></div>
+      <div class="subttl" style="margin-top:14px">Mes véhicules</div>
+      <p class="hint" style="margin-top:0">Ajoute tes véhicules (engin, camion…). Dans chaque journée tu choisis celui utilisé, reporté sur les déplacements pro et l'activité.</p>
+      <div id="veh_list"></div>
+      <div class="row" style="margin-top:8px">
+        <div class="col"><input type="text" id="veh_new_machine" placeholder="Machine / engin"></div>
+        <div class="col"><input type="text" id="veh_new_plaque" placeholder="N° plaque"></div>
       </div>
-      <label class="fl">Type</label>
-      <div class="seg" id="veh_type_seg"></div>
-      <hr class="sep">
+      <div class="row" style="margin-top:8px;align-items:stretch">
+        <div class="col" style="max-width:130px"><select id="veh_new_type"><option value="">Type…</option><option value="pl">PL</option><option value="vl">VL</option></select></div>
+        <div class="col"><button class="btn ghost" id="veh_add" style="width:100%">＋ Ajouter</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEMAINE -->
+  <div class="card open" id="card-week">
+    <div class="hd" data-toggle>🗓 Semaine <span class="chev">▶</span></div>
+    <div class="bd">
       <div class="weekhd">
         <div class="col">
           <label class="fl">Semaine enregistrée</label>
@@ -257,7 +273,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="1.4";
+const APP_VERSION="1.7";
 const DRIVE_FOLDER_URL="https://drive.google.com/drive/folders/1IFN4XcdtpVMaBwEzcD99xth8Vo6Bl1nE";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
@@ -267,7 +283,13 @@ function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{weeks
 function saveStore(){localStorage.setItem(LS_KEY,JSON.stringify(store));}
 let store=loadStore();
 if(!store.identity) store.identity=Object.assign({},DEFAULT_ID);
-if(!store.vehicle) store.vehicle={machine:"",plaque:"",type:""};
+// vehicles: list of {id,machine,plaque,type}
+if(store.vehicle && !store.vehicles){
+  store.vehicles=(store.vehicle.machine||store.vehicle.plaque||store.vehicle.type)
+    ?[{id:vehUid(),machine:store.vehicle.machine||"",plaque:store.vehicle.plaque||"",type:store.vehicle.type||""}]:[];
+  delete store.vehicle;saveStore();
+}
+if(!store.vehicles) store.vehicles=[];
 
 function isoMonday(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);
   x.setHours(12,0,0,0);return x;}
@@ -350,6 +372,7 @@ function colC(){return {title:"C · Activité",tag:"cœur de journée",controls:
   {t:"subttl",v:"Temps d'inactivité"},
   {t:"inact"},
   {t:"subttl",v:"Machine / remarques"},
+  {t:"vehpick",idRole:"c_vehId",machineRole:"c_machine",plaqueRole:"c_plaque"},
   {t:"text",label:"Machine (centre)",role:"c_machine"},
   {t:"text",label:"N° plaque (centre)",role:"c_plaque"},
   {t:"remarks",label:"Autre activité / remarques"},
@@ -455,8 +478,28 @@ function renderPause(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl
   const b=el("div","col");b.appendChild(el("span","mini","À"));b.appendChild(timeInput(ds,c.ahh,c.amm));
   row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
 
+function renderVehPicker(ds,o){
+  if(!store.vehicles.length)return null;
+  const w=el("div");w.appendChild(el("label","fl","Véhicule (profil)"));
+  const sel=el("select");sel.appendChild(new Option("— aucun —",""));
+  store.vehicles.forEach(v=>sel.appendChild(new Option(vehLabel(v),v.id)));
+  sel.value=ds[o.idRole]||"";
+  sel.onchange=()=>{
+    const id=sel.value;const v=store.vehicles.find(x=>x.id===id);
+    ds[o.idRole]=id;
+    if(v){ds[o.machineRole]=v.machine||"";if(o.plaqueRole)ds[o.plaqueRole]=v.plaque||"";
+      if(o.plRole){ds[o.plRole]=(v.type==="pl");ds[o.vlRole]=(v.type==="vl");}}
+    else{ds[o.machineRole]="";if(o.plaqueRole)ds[o.plaqueRole]="";
+      if(o.plRole){ds[o.plRole]=false;ds[o.vlRole]=false;}}
+    markDirty();renderDays();
+  };
+  w.appendChild(sel);return w;
+}
 function renderVeh(ds,c){
   const p=c.prefix;const w=el("div","veh");
+  // Véhicule du profil (menu déroulant)
+  const pick=renderVehPicker(ds,{idRole:p+"_vehId",machineRole:p+"_machine",plaqueRole:p+"_plaque",plRole:p+"_pl",vlRole:p+"_vl"});
+  if(pick)w.appendChild(pick);
   // Véhicule privé checkbox
   const chk=el("label","chk");
   const cb=el("input");cb.type="checkbox";cb.checked=!!ds[p+"_vehprive"];
@@ -476,12 +519,12 @@ function renderVeh(ds,c){
   const row=el("div","row");
   const m=el("div","col");m.appendChild(el("label","fl","Machine"));
   const mi=el("input");mi.type="text";mi.value=ds[p+"_machine"]||"";
-  if(store.vehicle.machine)mi.placeholder=store.vehicle.machine;
+  {const ev=effectiveVeh(ds);if(ev&&ev.machine)mi.placeholder=ev.machine;}
   mi.oninput=()=>{ds[p+"_machine"]=mi.value;markDirty();};
   m.appendChild(mi);
   const pl=el("div","col");pl.appendChild(el("label","fl","N° plaque"));
   const pi=el("input");pi.type="text";pi.value=ds[p+"_plaque"]||"";
-  if(store.vehicle.plaque)pi.placeholder=store.vehicle.plaque;
+  {const ev=effectiveVeh(ds);if(ev&&ev.plaque)pi.placeholder=ev.plaque;}
   pi.oninput=()=>{ds[p+"_plaque"]=pi.value;markDirty();};
   pl.appendChild(pi);
   row.appendChild(m);row.appendChild(pl);w.appendChild(row);
@@ -530,8 +573,8 @@ function renderInact(ds,dayKey){
 }
 function renderText(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
   const i=el("input");i.type="text";i.value=ds[c.role]||"";i.oninput=()=>{ds[c.role]=i.value;markDirty();};
-  if(c.role==="c_machine"&&store.vehicle.machine)i.placeholder=store.vehicle.machine;
-  if(c.role==="c_plaque"&&store.vehicle.plaque)i.placeholder=store.vehicle.plaque;
+  if(c.role==="c_machine"){const ev=effectiveVeh(ds);if(ev&&ev.machine)i.placeholder=ev.machine;}
+  if(c.role==="c_plaque"){const ev=effectiveVeh(ds);if(ev&&ev.plaque)i.placeholder=ev.plaque;}
   w.appendChild(i);return w;}
 function renderRemarks(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
   const ta=el("textarea");ta.rows=4;
@@ -554,6 +597,7 @@ function renderControl(ds,c,dayKey){
     case "activity":return renderActivity(ds);
     case "inact":return renderInact(ds,dayKey);
     case "text":return renderText(ds,c);
+    case "vehpick":return renderVehPicker(ds,c)||el("div");
     case "remarks":return renderRemarks(ds,c);
   }
   return el("div");
@@ -576,11 +620,12 @@ function colHasData(ds,col){
 
 function dayHasData(k){const ds=curDayState(k);return columns().some(col=>colHasData(ds,col));}
 
+let openDays={};
 function renderDays(){
   const root=$("#days");root.innerHTML="";
   DAYS.forEach(([k,label],idx)=>{
     const ds=curDayState(k);
-    const card=el("div","card");
+    const card=el("div","card");if(openDays[k])card.classList.add("open");
     const dt=dayDate(curWeek().monday,idx);
     const dstr=two(dt.getDate())+"/"+two(dt.getMonth()+1)+"/"+String(dt.getFullYear()).slice(2);
     const hd=el("div","hd");
@@ -591,13 +636,11 @@ function renderDays(){
     const flag=el("span","fill-flag"+(dayHasData(k)?" on":""));flag.dataset.day=k;
     right.appendChild(flag);const chev=el("span","chev","▶");right.appendChild(chev);
     hd.appendChild(right);
-    hd.onclick=(e)=>{card.classList.toggle("open");};
+    hd.onclick=(e)=>{card.classList.toggle("open");openDays[k]=card.classList.contains("open");};
     const bd=el("div","bd");
     // day buttons
     const db=el("div","daybtns");
     if(idx>0){const cp=el("button",null,"⧉ Copier "+DAYS[idx-1][1]);cp.onclick=()=>{copyDay(DAYS[idx-1][0],k);};db.appendChild(cp);}
-    if(store.vehicle.machine||store.vehicle.plaque||store.vehicle.type){
-      const vb=el("button",null,"🚚 Mon véhicule");vb.onclick=()=>{applyVehicle(k);};db.appendChild(vb);}
     const clr=el("button",null,"✕ Vider ce jour");clr.onclick=()=>{if(confirm("Vider "+label+" ?")){curWeek().days[k]={};markDirty();renderDays();}};
     db.appendChild(clr);
     bd.appendChild(db);
@@ -618,18 +661,6 @@ function renderDays(){
 }
 function copyDay(from,to){const src=curWeek().days[from];curWeek().days[to]=JSON.parse(JSON.stringify(src));
   markDirty();renderDays();toast("Jour copié");}
-function applyVehicle(k){
-  const ds=curWeek().days[k];const v=store.vehicle;
-  ["b_dep","d_dep"].forEach(p=>{
-    if(v.machine&&!ds[p+"_machine"])ds[p+"_machine"]=v.machine;
-    if(v.plaque&&!ds[p+"_plaque"])ds[p+"_plaque"]=v.plaque;
-    if(v.type&&!ds[p+"_pl"]&&!ds[p+"_vl"]){ds[p+"_pl"]=(v.type==="pl");ds[p+"_vl"]=(v.type==="vl");}
-  });
-  if(v.machine&&!ds["c_machine"])ds["c_machine"]=v.machine;
-  if(v.plaque&&!ds["c_plaque"])ds["c_plaque"]=v.plaque;
-  markDirty();renderDays();toast("Véhicule appliqué");
-}
-
 function updateFlags(){
   document.querySelectorAll(".fill-flag[data-day]").forEach(f=>{
     f.classList.toggle("on",dayHasData(f.dataset.day));});
@@ -794,15 +825,35 @@ function refreshWeekUI(){
 }
 function loadIdentityUI(){$("#id_nom").value=store.identity.nom||"";$("#id_prenom").value=store.identity.prenom||"";
   $("#id_adr1").value=store.identity.adr1||"";$("#id_adr2").value=store.identity.adr2||"";}
-function loadVehicleUI(){
-  $("#veh_machine").value=store.vehicle.machine||"";
-  $("#veh_plaque").value=store.vehicle.plaque||"";
-  const seg=$("#veh_type_seg");seg.innerHTML="";
-  [["","—"],["pl","PL"],["vl","VL"]].forEach(([val,lab])=>{
-    const b=el("button",(store.vehicle.type||"")===val?"on":"",lab);b.type="button";
-    b.onclick=()=>{store.vehicle.type=val;saveStore();
-      [...seg.children].forEach(x=>x.classList.remove("on"));b.classList.add("on");};
-    seg.appendChild(b);});
+function vehUid(){return "v"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function vehTypeLabel(t){return t==="pl"?"PL":(t==="vl"?"VL":"");}
+function vehLabel(v){const parts=[];if(v.machine)parts.push(v.machine);if(v.plaque)parts.push(v.plaque);
+  let s=parts.join(" · ")||"Véhicule";if(v.type)s+=" ("+vehTypeLabel(v.type)+")";return s;}
+function effectiveVeh(ds){
+  if(ds.vehId==="none")return null;
+  if(ds.vehId){const v=store.vehicles.find(x=>x.id===ds.vehId);if(v)return v;}
+  return store.vehicles.length===1?store.vehicles[0]:null;
+}
+function renderVehicleList(){
+  const box=document.getElementById("veh_list");if(!box)return;box.innerHTML="";
+  if(!store.vehicles.length){box.innerHTML='<p class="hint" style="margin:2px 0">Aucun véhicule enregistré.</p>';return;}
+  store.vehicles.forEach(v=>{
+    const row=el("div","vehrow");
+    const info=el("div","vinfo");
+    info.innerHTML='<b>'+(v.machine||"—")+'</b>'+(v.plaque?' · '+v.plaque:'');
+    row.appendChild(info);
+    if(v.type){const t=el("span","vtype",vehTypeLabel(v.type));row.appendChild(t);}
+    const del=el("button","vdel","✕");del.type="button";del.title="Supprimer";
+    del.onclick=()=>{store.vehicles=store.vehicles.filter(x=>x.id!==v.id);saveStore();renderVehicleList();renderDays();};
+    row.appendChild(del);box.appendChild(row);
+  });
+}
+function addVehicle(){
+  const m=$("#veh_new_machine").value.trim(),p=$("#veh_new_plaque").value.trim(),t=$("#veh_new_type").value;
+  if(!m&&!p){toast("Renseigne au moins la machine ou la plaque");return;}
+  store.vehicles.push({id:vehUid(),machine:m,plaque:p,type:t});saveStore();
+  $("#veh_new_machine").value="";$("#veh_new_plaque").value="";$("#veh_new_type").value="";
+  renderVehicleList();renderDays();toast("Véhicule ajouté");
 }
 
 // ---------- PDF generation ----------
@@ -853,7 +904,7 @@ async function buildPDF(){
     const dt=dayDate(curWeek().monday,idx);
     // effective data with default vehicle reported on used pro legs + activity
     const ds=Object.assign({},ds0);
-    const v=store.vehicle||{};
+    const v=effectiveVeh(ds0)||{};
     const applyV=(p)=>{
       if(v.machine&&!ds[p+"_machine"])ds[p+"_machine"]=v.machine;
       if(v.plaque&&!ds[p+"_plaque"])ds[p+"_plaque"]=v.plaque;
@@ -902,8 +953,7 @@ function bind(){
   document.querySelectorAll("[data-toggle]").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   ["nom","prenom","adr1","adr2"].forEach(f=>{
     $("#id_"+f).oninput=e=>{store.identity[f]=e.target.value;saveStore();};});
-  $("#veh_machine").oninput=e=>{store.vehicle.machine=e.target.value;saveStore();};
-  $("#veh_plaque").oninput=e=>{store.vehicle.plaque=e.target.value;saveStore();};
+  $("#veh_add").onclick=addVehicle;
   $("#week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
   $("#week_monday").onchange=e=>{
     const iso=fmtISO(isoMonday(new Date(e.target.value+"T12:00:00")));
@@ -950,7 +1000,9 @@ function bind(){
 
 // ---------- init ----------
 function init(){
-  loadIdentityUI();loadVehicleUI();refreshWeekUI();renderDays();bind();
+  loadIdentityUI();renderVehicleList();refreshWeekUI();renderDays();bind();
+  if(!(store.identity.nom||store.identity.prenom||store.identity.adr1)){
+    const cp=document.getElementById("card-profile");if(cp)cp.classList.add("open");}
   document.getElementById("recap_month_input").value=defaultMonth();
   $("#status").textContent="Prêt · sauvegarde auto · v"+APP_VERSION;
   const av=document.getElementById("app_ver");if(av)av.textContent=APP_VERSION;

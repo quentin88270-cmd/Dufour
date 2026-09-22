@@ -1,5 +1,5 @@
 /* Feuille de pointage DCL — service worker (offline-first) */
-const CACHE = "fdp-dcl-v5";
+const CACHE = "fdp-dcl-v8";
 const ASSETS = [
   "./",
   "./index.html",
