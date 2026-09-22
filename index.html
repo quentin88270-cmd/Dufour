@@ -58,6 +58,10 @@ textarea{resize:vertical;min-height:56px;line-height:1.35}
 .timewrap{display:flex;align-items:center;gap:6px}
 .timewrap input{max-width:90px;text-align:center}
 .timewrap span{color:var(--muted);font-weight:700}
+input[type=time].timepick{max-width:150px;min-width:118px;text-align:left;padding:9px 10px;
+  font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
+  font-family:inherit;outline:none}
+input[type=time].timepick:focus{border-color:var(--bordeaux)}
 .chk{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:14px}
 .chk input{width:20px;height:20px;accent-color:var(--bordeaux);flex:0 0 auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
@@ -134,12 +138,13 @@ table.recap td.big{font-weight:800;color:var(--ink)}
   <div class="card open" id="card-head">
     <div class="hd" data-toggle>Identité &amp; semaine <span class="chev">▶</span></div>
     <div class="bd">
+      <p class="hint" style="margin-top:0">Renseigne ton identité une fois : elle est mémorisée sur ce téléphone et reportée en haut de la feuille.</p>
       <div class="row">
-        <div class="col"><label class="fl">Nom</label><input type="text" id="id_nom"></div>
-        <div class="col"><label class="fl">Prénom</label><input type="text" id="id_prenom"></div>
+        <div class="col"><label class="fl">Nom</label><input type="text" id="id_nom" placeholder="Ton nom" autocomplete="family-name"></div>
+        <div class="col"><label class="fl">Prénom</label><input type="text" id="id_prenom" placeholder="Ton prénom" autocomplete="given-name"></div>
       </div>
-      <label class="fl">Adresse (ligne 1)</label><input type="text" id="id_adr1">
-      <label class="fl">Adresse (ligne 2)</label><input type="text" id="id_adr2">
+      <label class="fl">Adresse (ligne 1)</label><input type="text" id="id_adr1" placeholder="N° et rue" autocomplete="address-line1">
+      <label class="fl">Adresse (ligne 2)</label><input type="text" id="id_adr2" placeholder="Code postal et ville" autocomplete="address-line2">
       <hr class="sep">
       <div class="weekhd">
         <div class="col">
@@ -237,7 +242,7 @@ const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi"
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
 const DRIVE_FOLDER_URL="https://drive.google.com/drive/folders/1IFN4XcdtpVMaBwEzcD99xth8Vo6Bl1nE";
-const DEFAULT_ID={nom:"BERNARD",prenom:"Quentin",adr1:"17 rue paul legrand",adr2:"88130 ESSEGNEY"};
+const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
 function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{weeks:{},current:null,identity:null};}
@@ -363,14 +368,46 @@ function renderChoice(ds,c){
   wrap.appendChild(sel);wrap.appendChild(txt);
   return wrap;
 }
-function timeInput(ds,hhRole,mmRole){
+function timeInput(ds,hhRole,mmRole,dayKey){
   const w=el("div","timewrap");
-  const i=el("input");i.type="text";i.inputMode="numeric";i.setAttribute("pattern","[0-9]*");i.autocomplete="off";i.placeholder="hh:mm";i.style.maxWidth="120px";
-  const v=(ds[hhRole]||ds[mmRole])?((ds[hhRole]||"")+(ds[mmRole]?("h"+ds[mmRole]):"")):"";
-  i.value=v;
-  i.oninput=()=>{const p=parseTime(i.value);ds[hhRole]=p.hh;ds[mmRole]=p.mm;markDirty();};
+  const i=el("input");i.type="time";i.step="60";i.className="timepick";
+  const base=hhRole.replace(/_hh$/,"");
+  if(dayKey){i.dataset.day=dayKey;i.dataset.base=base;}
+  const hh=ds[hhRole],mm=ds[mmRole];
+  if(hh!==undefined&&hh!==""){
+    i.value=two(parseInt(hh,10)||0)+":"+two((mm!==undefined&&mm!=="")?(parseInt(mm,10)||0):0);
+  }
+  const apply=()=>{const val=i.value;
+    if(!val){ds[hhRole]="";ds[mmRole]="";}
+    else{const p=val.split(":");ds[hhRole]=String(parseInt(p[0],10)||0);ds[mmRole]=two(parseInt(p[1]||"0",10)||0);}
+    linkAfterChange(ds,dayKey,base);
+    markDirty();};
+  i.onchange=apply;i.oninput=apply;
   w.appendChild(i);
   return w;
+}
+// --- auto-link: arrivée aller -> début activité ; fin activité -> départ retour ---
+function tv(ds,base){const hh=ds[base+"_hh"];if(hh===undefined||hh==="")return null;
+  const mm=ds[base+"_mm"];return {hh:hh,mm:(mm===undefined||mm==="")?"00":mm};}
+function setTimeField(ds,dayKey,base,hh,mm){
+  ds[base+"_hh"]=String(parseInt(hh,10)||0);ds[base+"_mm"]=two(parseInt(mm,10)||0);
+  if(dayKey){const inp=document.querySelector('input.timepick[data-day="'+dayKey+'"][data-base="'+base+'"]');
+    if(inp)inp.value=two(parseInt(hh,10)||0)+":"+two(parseInt(mm,10)||0);}
+}
+function colUsed(ds,pref){
+  if(ds[pref+"_dep_h_hh"]||ds[pref+"_arr_h_hh"])return true;
+  return ["_dep_chantier","_dep_depot1","_dep_depot2","_dep_depot3","_dep_depot4","_dep_autre_chk"]
+    .some(s=>ds[pref+s]);
+}
+function linkAfterChange(ds,dayKey,base){
+  if(base==="a_arr_h"||base==="b_arr_h"){
+    const src=tv(ds,"b_arr_h")||tv(ds,"a_arr_h");
+    if(src)setTimeField(ds,dayKey,"c_deb",src.hh,src.mm);
+  }else if(base==="c_fin"){
+    const v=tv(ds,"c_fin");if(!v)return;
+    const tgt=(colUsed(ds,"e")&&!colUsed(ds,"d"))?"e_dep_h":"d_dep_h";
+    setTimeField(ds,dayKey,tgt,v.hh,v.mm);
+  }
 }
 function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   let m=s.match(/^(\d{1,2})\s*[:hH.]\s*(\d{0,2})$/);
@@ -379,16 +416,16 @@ function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   m=s.match(/^(\d{1,2})$/);if(m)return {hh:m[1],mm:""};
   return {hh:s,mm:""};
 }
-function renderTime(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
-  w.appendChild(timeInput(ds,c.hh,c.mm));return w;}
-function renderTime2(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
+function renderTime(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
+  w.appendChild(timeInput(ds,c.hh,c.mm,dayKey));return w;}
+function renderTime2(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   const row=el("div","row");
-  const a=el("div","col");a.appendChild(el("span","mini","Début"));a.appendChild(timeInput(ds,c.dhh,c.dmm));
-  const b=el("div","col");b.appendChild(el("span","mini","Fin"));b.appendChild(timeInput(ds,c.fhh,c.fmm));
+  const a=el("div","col");a.appendChild(el("span","mini","Début"));a.appendChild(timeInput(ds,c.dhh,c.dmm,dayKey));
+  const b=el("div","col");b.appendChild(el("span","mini","Fin"));b.appendChild(timeInput(ds,c.fhh,c.fmm,dayKey));
   row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
-function renderPause(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
+function renderPause(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   const row=el("div","row");
-  const a=el("div","col");a.appendChild(el("span","mini","De"));a.appendChild(timeInput(ds,c.dhh,c.dmm));
+  const a=el("div","col");a.appendChild(el("span","mini","De"));a.appendChild(timeInput(ds,c.dhh,c.dmm,dayKey));
   const b=el("div","col");b.appendChild(el("span","mini","À"));b.appendChild(timeInput(ds,c.ahh,c.amm));
   row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
 
@@ -446,13 +483,13 @@ function renderActivity(ds){
   w.appendChild(seg);w.appendChild(box);draw();
   return w;
 }
-function renderInact(ds){
+function renderInact(ds,dayKey){
   const w=el("div");
   const seg=el("div","seg");
   const box=el("div");
   const cur=ds["c_inact_oui"]?"oui":(ds["c_inact_non"]?"non":"");
   function draw(){box.innerHTML="";if(ds["c_inact_oui"]){
-    box.appendChild(el("label","fl","Durée d'inactivité"));box.appendChild(timeInput(ds,"c_inact_hh","c_inact_mm"));}}
+    box.appendChild(el("label","fl","Durée d'inactivité"));box.appendChild(timeInput(ds,"c_inact_hh","c_inact_mm",dayKey));}}
   [["","—"],["non","Non"],["oui","Oui"]].forEach(([val,lab])=>{
     const b=el("button",cur===val?"on":"",lab);b.type="button";
     b.onclick=()=>{ds["c_inact_non"]=(val==="non");ds["c_inact_oui"]=(val==="oui");
@@ -474,16 +511,16 @@ function renderRemarks(ds,c){const w=el("div");w.appendChild(el("label","fl",c.l
   return w;
 }
 
-function renderControl(ds,c){
+function renderControl(ds,c,dayKey){
   switch(c.t){
     case "subttl":return el("div","subttl",c.v);
     case "choice":return renderChoice(ds,c);
-    case "time":return renderTime(ds,c);
-    case "time2":return renderTime2(ds,c);
-    case "pause":return renderPause(ds,c);
+    case "time":return renderTime(ds,c,dayKey);
+    case "time2":return renderTime2(ds,c,dayKey);
+    case "pause":return renderPause(ds,c,dayKey);
     case "veh":return renderVeh(ds,c);
     case "activity":return renderActivity(ds);
-    case "inact":return renderInact(ds);
+    case "inact":return renderInact(ds,dayKey);
     case "text":return renderText(ds,c);
     case "remarks":return renderRemarks(ds,c);
   }
@@ -538,7 +575,7 @@ function renderDays(){
       const fl=el("span","fill-flag"+(colHasData(ds,col)?" on":""));rt.appendChild(fl);
       const cv=el("span","chev","▶");rt.appendChild(cv);h.appendChild(rt);
       const b=el("div","b");
-      col.controls.forEach(ctrl=>b.appendChild(renderControl(ds,ctrl)));
+      col.controls.forEach(ctrl=>b.appendChild(renderControl(ds,ctrl,k)));
       h.onclick=()=>c5.classList.toggle("open");
       c5.appendChild(h);c5.appendChild(b);bd.appendChild(c5);
     });
