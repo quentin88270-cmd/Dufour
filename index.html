@@ -234,7 +234,6 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
 <div class="bar">
   <div class="status" id="status">Chargement…</div>
-  <button class="btn ghost" id="btn_drive" title="Ouvrir le dossier Drive">📁 Drive</button>
   <button class="btn ghost" id="btn_share" disabled>Partager</button>
   <button class="btn primary" id="btn_pdf" disabled>Enregistrer le PDF</button>
 </div>
@@ -273,8 +272,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="1.7";
-const DRIVE_FOLDER_URL="https://drive.google.com/drive/folders/1IFN4XcdtpVMaBwEzcD99xth8Vo6Bl1nE";
+const APP_VERSION="1.9";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
@@ -621,6 +619,7 @@ function colHasData(ds,col){
 function dayHasData(k){const ds=curDayState(k);return columns().some(col=>colHasData(ds,col));}
 
 let openDays={};
+let openCols={};
 function renderDays(){
   const root=$("#days");root.innerHTML="";
   DAYS.forEach(([k,label],idx)=>{
@@ -645,15 +644,16 @@ function renderDays(){
     db.appendChild(clr);
     bd.appendChild(db);
     // 5 columns
-    columns().forEach(col=>{
-      const c5=el("div","col5");
+    columns().forEach((col,ci)=>{
+      const ckey=k+"|"+ci;
+      const c5=el("div","col5");if(openCols[ckey])c5.classList.add("open");
       const h=el("div","h");h.innerHTML='<span>'+col.title+'</span>';
       const rt=el("span");const tag=el("span","tag",col.tag);rt.appendChild(tag);
       const fl=el("span","fill-flag"+(colHasData(ds,col)?" on":""));rt.appendChild(fl);
       const cv=el("span","chev","▶");rt.appendChild(cv);h.appendChild(rt);
       const b=el("div","b");
       col.controls.forEach(ctrl=>b.appendChild(renderControl(ds,ctrl,k)));
-      h.onclick=()=>c5.classList.toggle("open");
+      h.onclick=()=>{c5.classList.toggle("open");openCols[ckey]=c5.classList.contains("open");};
       c5.appendChild(h);c5.appendChild(b);bd.appendChild(c5);
     });
     card.appendChild(hd);card.appendChild(bd);root.appendChild(card);
@@ -986,7 +986,6 @@ function bind(){
       }else{downloadPDF(bytes,fname);toast("Partage non supporté → PDF enregistré");}
     }catch(e){console.error(e);alert("Erreur : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
-  $("#btn_drive").onclick=()=>{window.open(DRIVE_FOLDER_URL,"_blank","noopener");};
   // recap
   $("#tab_week").onclick=()=>{recapMode="week";$("#tab_week").classList.add("on");$("#tab_month").classList.remove("on");
     $("#recap_week").style.display="";$("#recap_month").style.display="none";refreshRecap();};
