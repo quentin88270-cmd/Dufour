@@ -58,6 +58,10 @@ textarea{resize:vertical;min-height:56px;line-height:1.35}
 .timewrap{display:flex;align-items:center;gap:6px}
 .timewrap input{max-width:90px;text-align:center}
 .timewrap span{color:var(--muted);font-weight:700}
+input[type=time].timepick{max-width:150px;min-width:118px;text-align:left;padding:9px 10px;
+  font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);
+  font-family:inherit;outline:none}
+input[type=time].timepick:focus{border-color:var(--bordeaux)}
 .chk{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:14px}
 .chk input{width:20px;height:20px;accent-color:var(--bordeaux);flex:0 0 auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
@@ -134,12 +138,21 @@ table.recap td.big{font-weight:800;color:var(--ink)}
   <div class="card open" id="card-head">
     <div class="hd" data-toggle>Identité &amp; semaine <span class="chev">▶</span></div>
     <div class="bd">
+      <p class="hint" style="margin-top:0">Renseigne ton identité une fois : elle est mémorisée sur ce téléphone et reportée en haut de la feuille.</p>
       <div class="row">
-        <div class="col"><label class="fl">Nom</label><input type="text" id="id_nom"></div>
-        <div class="col"><label class="fl">Prénom</label><input type="text" id="id_prenom"></div>
+        <div class="col"><label class="fl">Nom</label><input type="text" id="id_nom" placeholder="Ton nom" autocomplete="family-name"></div>
+        <div class="col"><label class="fl">Prénom</label><input type="text" id="id_prenom" placeholder="Ton prénom" autocomplete="given-name"></div>
       </div>
-      <label class="fl">Adresse (ligne 1)</label><input type="text" id="id_adr1">
-      <label class="fl">Adresse (ligne 2)</label><input type="text" id="id_adr2">
+      <label class="fl">Adresse (ligne 1)</label><input type="text" id="id_adr1" placeholder="N° et rue" autocomplete="address-line1">
+      <label class="fl">Adresse (ligne 2)</label><input type="text" id="id_adr2" placeholder="Code postal et ville" autocomplete="address-line2">
+      <div class="subttl" style="margin-top:14px">Mon véhicule (par défaut)</div>
+      <p class="hint" style="margin-top:0">Reporté automatiquement sur les déplacements pro et l'activité. Modifiable au jour le jour.</p>
+      <div class="row">
+        <div class="col"><label class="fl">Machine / engin</label><input type="text" id="veh_machine" placeholder="ex. ATF 40G2"></div>
+        <div class="col"><label class="fl">N° plaque</label><input type="text" id="veh_plaque" placeholder="ex. GT-990-PT"></div>
+      </div>
+      <label class="fl">Type</label>
+      <div class="seg" id="veh_type_seg"></div>
       <hr class="sep">
       <div class="weekhd">
         <div class="col">
@@ -193,6 +206,14 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
   <div id="days"></div>
 
+  <div class="card" id="card-about">
+    <div class="hd" data-toggle>À propos &amp; mise à jour <span class="chev">▶</span></div>
+    <div class="bd">
+      <p class="hint" style="margin-top:2px">Version <b id="app_ver">—</b>. Si une nouveauté n'apparaît pas (ex. la roulette des heures), force la mise à jour — ça vide le cache et recharge la dernière version. Nécessite Internet si l'appli est hébergée.</p>
+      <button class="btn ghost" id="btn_update" style="width:100%">🔄 Forcer la mise à jour</button>
+    </div>
+  </div>
+
 </div>
 
 <div class="bar">
@@ -236,8 +257,9 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
+const APP_VERSION="1.4";
 const DRIVE_FOLDER_URL="https://drive.google.com/drive/folders/1IFN4XcdtpVMaBwEzcD99xth8Vo6Bl1nE";
-const DEFAULT_ID={nom:"BERNARD",prenom:"Quentin",adr1:"17 rue paul legrand",adr2:"88130 ESSEGNEY"};
+const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
 function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{weeks:{},current:null,identity:null};}
@@ -245,6 +267,7 @@ function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{weeks
 function saveStore(){localStorage.setItem(LS_KEY,JSON.stringify(store));}
 let store=loadStore();
 if(!store.identity) store.identity=Object.assign({},DEFAULT_ID);
+if(!store.vehicle) store.vehicle={machine:"",plaque:"",type:""};
 
 function isoMonday(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);
   x.setHours(12,0,0,0);return x;}
@@ -363,14 +386,54 @@ function renderChoice(ds,c){
   wrap.appendChild(sel);wrap.appendChild(txt);
   return wrap;
 }
-function timeInput(ds,hhRole,mmRole){
+function timeInput(ds,hhRole,mmRole,dayKey){
   const w=el("div","timewrap");
-  const i=el("input");i.type="text";i.inputMode="numeric";i.setAttribute("pattern","[0-9]*");i.autocomplete="off";i.placeholder="hh:mm";i.style.maxWidth="120px";
-  const v=(ds[hhRole]||ds[mmRole])?((ds[hhRole]||"")+(ds[mmRole]?("h"+ds[mmRole]):"")):"";
-  i.value=v;
-  i.oninput=()=>{const p=parseTime(i.value);ds[hhRole]=p.hh;ds[mmRole]=p.mm;markDirty();};
+  const i=el("input");i.type="time";i.step="60";i.className="timepick";
+  const base=hhRole.replace(/_hh$/,"");
+  if(dayKey){i.dataset.day=dayKey;i.dataset.base=base;}
+  const hh=ds[hhRole],mm=ds[mmRole];
+  if(hh!==undefined&&hh!==""){
+    i.value=two(parseInt(hh,10)||0)+":"+two((mm!==undefined&&mm!=="")?(parseInt(mm,10)||0):0);
+  }
+  const apply=()=>{const val=i.value;
+    if(!val){ds[hhRole]="";ds[mmRole]="";}
+    else{const p=val.split(":");ds[hhRole]=String(parseInt(p[0],10)||0);ds[mmRole]=two(parseInt(p[1]||"0",10)||0);}
+    linkAfterChange(ds,dayKey,base);
+    markDirty();};
+  i.onchange=apply;i.oninput=apply;
   w.appendChild(i);
   return w;
+}
+// --- auto-link: arrivée aller -> début activité ; fin activité -> départ retour ---
+function tv(ds,base){const hh=ds[base+"_hh"];if(hh===undefined||hh==="")return null;
+  const mm=ds[base+"_mm"];return {hh:hh,mm:(mm===undefined||mm==="")?"00":mm};}
+function setTimeField(ds,dayKey,base,hh,mm){
+  ds[base+"_hh"]=String(parseInt(hh,10)||0);ds[base+"_mm"]=two(parseInt(mm,10)||0);
+  if(dayKey){const inp=document.querySelector('input.timepick[data-day="'+dayKey+'"][data-base="'+base+'"]');
+    if(inp)inp.value=two(parseInt(hh,10)||0)+":"+two(parseInt(mm,10)||0);}
+}
+function colUsed(ds,pref){
+  if(ds[pref+"_dep_h_hh"]||ds[pref+"_arr_h_hh"])return true;
+  return ["_dep_chantier","_dep_depot1","_dep_depot2","_dep_depot3","_dep_depot4","_dep_autre_chk"]
+    .some(s=>ds[pref+s]);
+}
+function linkAfterChange(ds,dayKey,base){
+  if(base==="a_arr_h"){
+    const v=tv(ds,"a_arr_h");if(!v)return;
+    if(ds["a_arr_chantier"]){ // domicile -> chantier direct : arrivée = début activité
+      if(!tv(ds,"b_arr_h"))setTimeField(ds,dayKey,"c_deb",v.hh,v.mm);
+    }else{ // arrivée au dépôt : = départ du déplacement pro aller
+      setTimeField(ds,dayKey,"b_dep_h",v.hh,v.mm);
+    }
+  }else if(base==="b_arr_h"){
+    const v=tv(ds,"b_arr_h");if(v)setTimeField(ds,dayKey,"c_deb",v.hh,v.mm);
+  }else if(base==="c_fin"){
+    const v=tv(ds,"c_fin");if(!v)return;
+    const tgt=(colUsed(ds,"e")&&!colUsed(ds,"d"))?"e_dep_h":"d_dep_h";
+    setTimeField(ds,dayKey,tgt,v.hh,v.mm);
+  }else if(base==="d_arr_h"){
+    const v=tv(ds,"d_arr_h");if(v)setTimeField(ds,dayKey,"e_dep_h",v.hh,v.mm); // arrivée dépôt = départ trajet retour domicile
+  }
 }
 function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   let m=s.match(/^(\d{1,2})\s*[:hH.]\s*(\d{0,2})$/);
@@ -379,16 +442,16 @@ function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   m=s.match(/^(\d{1,2})$/);if(m)return {hh:m[1],mm:""};
   return {hh:s,mm:""};
 }
-function renderTime(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
-  w.appendChild(timeInput(ds,c.hh,c.mm));return w;}
-function renderTime2(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
+function renderTime(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
+  w.appendChild(timeInput(ds,c.hh,c.mm,dayKey));return w;}
+function renderTime2(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   const row=el("div","row");
-  const a=el("div","col");a.appendChild(el("span","mini","Début"));a.appendChild(timeInput(ds,c.dhh,c.dmm));
-  const b=el("div","col");b.appendChild(el("span","mini","Fin"));b.appendChild(timeInput(ds,c.fhh,c.fmm));
+  const a=el("div","col");a.appendChild(el("span","mini","Début"));a.appendChild(timeInput(ds,c.dhh,c.dmm,dayKey));
+  const b=el("div","col");b.appendChild(el("span","mini","Fin"));b.appendChild(timeInput(ds,c.fhh,c.fmm,dayKey));
   row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
-function renderPause(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
+function renderPause(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   const row=el("div","row");
-  const a=el("div","col");a.appendChild(el("span","mini","De"));a.appendChild(timeInput(ds,c.dhh,c.dmm));
+  const a=el("div","col");a.appendChild(el("span","mini","De"));a.appendChild(timeInput(ds,c.dhh,c.dmm,dayKey));
   const b=el("div","col");b.appendChild(el("span","mini","À"));b.appendChild(timeInput(ds,c.ahh,c.amm));
   row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
 
@@ -412,10 +475,14 @@ function renderVeh(ds,c){
   w.appendChild(seg);
   const row=el("div","row");
   const m=el("div","col");m.appendChild(el("label","fl","Machine"));
-  const mi=el("input");mi.type="text";mi.value=ds[p+"_machine"]||"";mi.oninput=()=>{ds[p+"_machine"]=mi.value;markDirty();};
+  const mi=el("input");mi.type="text";mi.value=ds[p+"_machine"]||"";
+  if(store.vehicle.machine)mi.placeholder=store.vehicle.machine;
+  mi.oninput=()=>{ds[p+"_machine"]=mi.value;markDirty();};
   m.appendChild(mi);
   const pl=el("div","col");pl.appendChild(el("label","fl","N° plaque"));
-  const pi=el("input");pi.type="text";pi.value=ds[p+"_plaque"]||"";pi.oninput=()=>{ds[p+"_plaque"]=pi.value;markDirty();};
+  const pi=el("input");pi.type="text";pi.value=ds[p+"_plaque"]||"";
+  if(store.vehicle.plaque)pi.placeholder=store.vehicle.plaque;
+  pi.oninput=()=>{ds[p+"_plaque"]=pi.value;markDirty();};
   pl.appendChild(pi);
   row.appendChild(m);row.appendChild(pl);w.appendChild(row);
   return w;
@@ -446,13 +513,13 @@ function renderActivity(ds){
   w.appendChild(seg);w.appendChild(box);draw();
   return w;
 }
-function renderInact(ds){
+function renderInact(ds,dayKey){
   const w=el("div");
   const seg=el("div","seg");
   const box=el("div");
   const cur=ds["c_inact_oui"]?"oui":(ds["c_inact_non"]?"non":"");
   function draw(){box.innerHTML="";if(ds["c_inact_oui"]){
-    box.appendChild(el("label","fl","Durée d'inactivité"));box.appendChild(timeInput(ds,"c_inact_hh","c_inact_mm"));}}
+    box.appendChild(el("label","fl","Durée d'inactivité"));box.appendChild(timeInput(ds,"c_inact_hh","c_inact_mm",dayKey));}}
   [["","—"],["non","Non"],["oui","Oui"]].forEach(([val,lab])=>{
     const b=el("button",cur===val?"on":"",lab);b.type="button";
     b.onclick=()=>{ds["c_inact_non"]=(val==="non");ds["c_inact_oui"]=(val==="oui");
@@ -463,6 +530,8 @@ function renderInact(ds){
 }
 function renderText(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
   const i=el("input");i.type="text";i.value=ds[c.role]||"";i.oninput=()=>{ds[c.role]=i.value;markDirty();};
+  if(c.role==="c_machine"&&store.vehicle.machine)i.placeholder=store.vehicle.machine;
+  if(c.role==="c_plaque"&&store.vehicle.plaque)i.placeholder=store.vehicle.plaque;
   w.appendChild(i);return w;}
 function renderRemarks(ds,c){const w=el("div");w.appendChild(el("label","fl",c.label));
   const ta=el("textarea");ta.rows=4;
@@ -474,16 +543,16 @@ function renderRemarks(ds,c){const w=el("div");w.appendChild(el("label","fl",c.l
   return w;
 }
 
-function renderControl(ds,c){
+function renderControl(ds,c,dayKey){
   switch(c.t){
     case "subttl":return el("div","subttl",c.v);
     case "choice":return renderChoice(ds,c);
-    case "time":return renderTime(ds,c);
-    case "time2":return renderTime2(ds,c);
-    case "pause":return renderPause(ds,c);
+    case "time":return renderTime(ds,c,dayKey);
+    case "time2":return renderTime2(ds,c,dayKey);
+    case "pause":return renderPause(ds,c,dayKey);
     case "veh":return renderVeh(ds,c);
     case "activity":return renderActivity(ds);
-    case "inact":return renderInact(ds);
+    case "inact":return renderInact(ds,dayKey);
     case "text":return renderText(ds,c);
     case "remarks":return renderRemarks(ds,c);
   }
@@ -527,6 +596,8 @@ function renderDays(){
     // day buttons
     const db=el("div","daybtns");
     if(idx>0){const cp=el("button",null,"⧉ Copier "+DAYS[idx-1][1]);cp.onclick=()=>{copyDay(DAYS[idx-1][0],k);};db.appendChild(cp);}
+    if(store.vehicle.machine||store.vehicle.plaque||store.vehicle.type){
+      const vb=el("button",null,"🚚 Mon véhicule");vb.onclick=()=>{applyVehicle(k);};db.appendChild(vb);}
     const clr=el("button",null,"✕ Vider ce jour");clr.onclick=()=>{if(confirm("Vider "+label+" ?")){curWeek().days[k]={};markDirty();renderDays();}};
     db.appendChild(clr);
     bd.appendChild(db);
@@ -538,7 +609,7 @@ function renderDays(){
       const fl=el("span","fill-flag"+(colHasData(ds,col)?" on":""));rt.appendChild(fl);
       const cv=el("span","chev","▶");rt.appendChild(cv);h.appendChild(rt);
       const b=el("div","b");
-      col.controls.forEach(ctrl=>b.appendChild(renderControl(ds,ctrl)));
+      col.controls.forEach(ctrl=>b.appendChild(renderControl(ds,ctrl,k)));
       h.onclick=()=>c5.classList.toggle("open");
       c5.appendChild(h);c5.appendChild(b);bd.appendChild(c5);
     });
@@ -547,6 +618,17 @@ function renderDays(){
 }
 function copyDay(from,to){const src=curWeek().days[from];curWeek().days[to]=JSON.parse(JSON.stringify(src));
   markDirty();renderDays();toast("Jour copié");}
+function applyVehicle(k){
+  const ds=curWeek().days[k];const v=store.vehicle;
+  ["b_dep","d_dep"].forEach(p=>{
+    if(v.machine&&!ds[p+"_machine"])ds[p+"_machine"]=v.machine;
+    if(v.plaque&&!ds[p+"_plaque"])ds[p+"_plaque"]=v.plaque;
+    if(v.type&&!ds[p+"_pl"]&&!ds[p+"_vl"]){ds[p+"_pl"]=(v.type==="pl");ds[p+"_vl"]=(v.type==="vl");}
+  });
+  if(v.machine&&!ds["c_machine"])ds["c_machine"]=v.machine;
+  if(v.plaque&&!ds["c_plaque"])ds["c_plaque"]=v.plaque;
+  markDirty();renderDays();toast("Véhicule appliqué");
+}
 
 function updateFlags(){
   document.querySelectorAll(".fill-flag[data-day]").forEach(f=>{
@@ -587,23 +669,26 @@ function weekRows(week){
     tT+=c.travail||0;tP+=c.pro||0;tD+=c.dom||0;
     rows.push({label:label,date:dstr,c:c,has:has});
   });
-  return {rows,tT,tP,tD,any};
+  return {rows,tT,tP,tD,tTot:tT+tP+tD,any};
 }
 function renderWeekRecap(){
-  const wk=curWeek();const {rows,tT,tP,tD}=weekRows(wk);
+  const wk=curWeek();const {rows,tT,tP,tD,tTot}=weekRows(wk);
   const mon=new Date(wk.monday+"T12:00:00");
   let html='<div class="recap-note">Semaine '+isoWeekNum(mon)+' — sem. du '+
     wk.monday.split("-").reverse().join("/")+'</div>';
   html+='<div class="recap-scroll"><table class="recap"><thead><tr>'+
-    '<th>Jour</th><th>Travail</th><th>Dépl.&nbsp;pro</th><th>Trajet&nbsp;dom.</th><th>Amplitude</th>'+
+    '<th>Jour</th><th>Travail</th><th>Dépl.&nbsp;pro</th><th>Trajet&nbsp;dom.</th><th>Total</th><th>Amplitude</th>'+
     '</tr></thead><tbody>';
   rows.forEach(r=>{
+    const rowTot=(r.c.travail||0)+(r.c.pro||0)+(r.c.dom||0);
     html+='<tr><td class="day">'+r.label+' <span class="mini">'+r.date+'</span></td>'+
-      cell(r.c.travail,"big")+cell(r.c.pro)+cell(r.c.dom)+cell(r.c.amp)+'</tr>';
+      cell(r.c.travail)+cell(r.c.pro)+cell(r.c.dom)+cell(rowTot,"big")+cell(r.c.amp)+'</tr>';
   });
-  html+='</tbody><tfoot><tr class="total"><td class="day">Total ('+dec(tT)+' h)</td>'+
-    '<td class="big">'+hm(tT)+'</td><td>'+hm(tP)+'</td><td>'+hm(tD)+'</td><td>—</td></tr></tfoot>';
+  html+='</tbody><tfoot><tr class="total"><td class="day">Total</td>'+
+    '<td>'+hm(tT)+'</td><td>'+hm(tP)+'</td><td>'+hm(tD)+'</td>'+
+    '<td class="big">'+hm(tTot)+'<br><span class="mini">'+dec(tTot)+' h</span></td><td>—</td></tr></tfoot>';
   html+='</table></div>';
+  html+='<div class="recap-note"><b>Total général</b> (travail + déplacements + trajets) : <b>'+hm(tTot)+'</b> — soit '+dec(tTot)+' h. Dont travail '+hm(tT)+' ('+dec(tT)+' h).</div>';
   document.getElementById("recap_week").innerHTML=html;
 }
 function daysInMonth(y,m){ // m 0-based; returns array of {week,dayKey,idx,date} for stored days in that month
@@ -626,10 +711,10 @@ function renderMonthRecap(){
   list.forEach(it=>{const key=it.wk.monday;(byWeek[key]=byWeek[key]||[]).push(it);});
   let gT=0,gP=0,gD=0,nDays=0;
   let html='<div class="recap-scroll"><table class="recap"><thead><tr>'+
-    '<th>Semaine</th><th>Jours</th><th>Travail</th><th>Dépl.&nbsp;pro</th><th>Trajet&nbsp;dom.</th>'+
+    '<th>Semaine</th><th>Jours</th><th>Travail</th><th>Dépl.&nbsp;pro</th><th>Trajet&nbsp;dom.</th><th>Total</th>'+
     '</tr></thead><tbody>';
   const weeks=Object.keys(byWeek).sort();
-  if(!weeks.length){html+='<tr><td colspan="5" class="zero">Aucune journée saisie pour ce mois.</td></tr>';}
+  if(!weeks.length){html+='<tr><td colspan="6" class="zero">Aucune journée saisie pour ce mois.</td></tr>';}
   weeks.forEach(mondayISO=>{
     let wT=0,wP=0,wD=0,cnt=0;
     byWeek[mondayISO].forEach(it=>{const c=dayCalc(it.wk.days[it.k]);
@@ -638,10 +723,13 @@ function renderMonthRecap(){
     gT+=wT;gP+=wP;gD+=wD;nDays+=cnt;
     const mon=new Date(mondayISO+"T12:00:00");
     html+='<tr><td class="day">S'+isoWeekNum(mon)+'</td><td>'+cnt+'</td>'+
-      cell(wT,"big")+cell(wP)+cell(wD)+'</tr>';
+      cell(wT)+cell(wP)+cell(wD)+cell(wT+wP+wD,"big")+'</tr>';
   });
-  html+='</tbody><tfoot><tr class="total"><td class="day">Total ('+dec(gT)+' h)</td><td>'+nDays+'</td>'+
-    '<td class="big">'+hm(gT)+'</td><td>'+hm(gP)+'</td><td>'+hm(gD)+'</td></tr></tfoot></table></div>';
+  const gTot=gT+gP+gD;
+  html+='</tbody><tfoot><tr class="total"><td class="day">Total</td><td>'+nDays+'</td>'+
+    '<td>'+hm(gT)+'</td><td>'+hm(gP)+'</td><td>'+hm(gD)+'</td>'+
+    '<td class="big">'+hm(gTot)+'<br><span class="mini">'+dec(gTot)+' h</span></td></tr></tfoot></table></div>';
+  html+='<div class="recap-note"><b>Total général du mois</b> : <b>'+hm(gTot)+'</b> ('+dec(gTot)+' h) sur '+nDays+' jour(s). Dont travail '+hm(gT)+' ('+dec(gT)+' h).</div>';
   document.getElementById("recap_month_body").innerHTML=html;
 }
 function defaultMonth(){const wk=curWeek();const mon=new Date(wk.monday+"T12:00:00");
@@ -657,25 +745,28 @@ function exportCSV(){
     return /[";\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}).join(sep));}
   if(recapMode==="week"){
     const wk=curWeek();
-    push(["Jour","Date","Début","Fin","Pauses","Inactivité","Travail (h:mm)","Travail (h déc.)","Dépl. pro","Trajet dom.","Amplitude"]);
+    push(["Jour","Date","Début","Fin","Pauses","Inactivité","Travail (h:mm)","Travail (h déc.)","Dépl. pro","Trajet dom.","Total (h:mm)","Total (h déc.)","Amplitude"]);
     DAYS.forEach(([k,label],idx)=>{const ds=wk.days[k];const c=dayCalc(ds);const dt=dayDate(wk.monday,idx);
+      const tot=(c.travail||0)+(c.pro||0)+(c.dom||0);
       push([label,two(dt.getDate())+"/"+two(dt.getMonth()+1)+"/"+dt.getFullYear(),
         hm(tod(ds,"c_deb")),hm(tod(ds,"c_fin")),hm(c.pause),hm(c.inact),
-        hm(c.travail),dec(c.travail),hm(c.pro),hm(c.dom),hm(c.amp)]);});
+        hm(c.travail),dec(c.travail),hm(c.pro),hm(c.dom),hm(tot),dec(tot),hm(c.amp)]);});
     const t=weekRows(wk);
-    push(["TOTAL","","","","","",hm(t.tT),dec(t.tT),hm(t.tP),hm(t.tD),""]);
+    push(["TOTAL","","","","","",hm(t.tT),dec(t.tT),hm(t.tP),hm(t.tD),hm(t.tTot),dec(t.tTot),""]);
     downloadText(rowsOut.join("\r\n"),"Recap_S"+two(isoWeekNum(new Date(wk.monday+"T12:00:00")))+"_"+new Date(wk.monday+"T12:00:00").getFullYear()+".csv");
   }else{
     const val=document.getElementById("recap_month_input").value||defaultMonth();
     const [y,m]=val.split("-").map(Number);const list=daysInMonth(y,m-1);
-    push(["Date","Jour","Début","Fin","Pauses","Inactivité","Travail (h:mm)","Travail (h déc.)","Dépl. pro","Trajet dom.","Amplitude"]);
+    push(["Date","Jour","Début","Fin","Pauses","Inactivité","Travail (h:mm)","Travail (h déc.)","Dépl. pro","Trajet dom.","Total (h:mm)","Total (h déc.)","Amplitude"]);
     let gT=0,gP=0,gD=0;
     list.forEach(it=>{const ds=it.wk.days[it.k];const c=dayCalc(ds);
       gT+=c.travail||0;gP+=c.pro||0;gD+=c.dom||0;
+      const tot=(c.travail||0)+(c.pro||0)+(c.dom||0);
       push([two(it.date.getDate())+"/"+two(it.date.getMonth()+1)+"/"+it.date.getFullYear(),
         DAYS[it.idx][1],hm(tod(ds,"c_deb")),hm(tod(ds,"c_fin")),hm(c.pause),hm(c.inact),
-        hm(c.travail),dec(c.travail),hm(c.pro),hm(c.dom),hm(c.amp)]);});
-    push(["TOTAL","","","","","",hm(gT),dec(gT),hm(gP),hm(gD),""]);
+        hm(c.travail),dec(c.travail),hm(c.pro),hm(c.dom),hm(tot),dec(tot),hm(c.amp)]);});
+    const gTot=gT+gP+gD;
+    push(["TOTAL","","","","","",hm(gT),dec(gT),hm(gP),hm(gD),hm(gTot),dec(gTot),""]);
     downloadText(rowsOut.join("\r\n"),"Recap_"+val+".csv");
   }
   toast("CSV exporté");
@@ -703,6 +794,16 @@ function refreshWeekUI(){
 }
 function loadIdentityUI(){$("#id_nom").value=store.identity.nom||"";$("#id_prenom").value=store.identity.prenom||"";
   $("#id_adr1").value=store.identity.adr1||"";$("#id_adr2").value=store.identity.adr2||"";}
+function loadVehicleUI(){
+  $("#veh_machine").value=store.vehicle.machine||"";
+  $("#veh_plaque").value=store.vehicle.plaque||"";
+  const seg=$("#veh_type_seg");seg.innerHTML="";
+  [["","—"],["pl","PL"],["vl","VL"]].forEach(([val,lab])=>{
+    const b=el("button",(store.vehicle.type||"")===val?"on":"",lab);b.type="button";
+    b.onclick=()=>{store.vehicle.type=val;saveStore();
+      [...seg.children].forEach(x=>x.classList.remove("on"));b.classList.add("on");};
+    seg.appendChild(b);});
+}
 
 // ---------- PDF generation ----------
 function b64ToBytes(b64){const bin=atob(b64);const len=bin.length;const bytes=new Uint8Array(len);
@@ -748,8 +849,20 @@ async function buildPDF(){
   drawTextAt("Adresse 2",store.identity.adr2,8.5);
   // per day
   DAYS.forEach(([k],idx)=>{
-    const ds=curWeek().days[k];const rmap=MAP[k];
+    const ds0=curWeek().days[k];const rmap=MAP[k];
     const dt=dayDate(curWeek().monday,idx);
+    // effective data with default vehicle reported on used pro legs + activity
+    const ds=Object.assign({},ds0);
+    const v=store.vehicle||{};
+    const applyV=(p)=>{
+      if(v.machine&&!ds[p+"_machine"])ds[p+"_machine"]=v.machine;
+      if(v.plaque&&!ds[p+"_plaque"])ds[p+"_plaque"]=v.plaque;
+      if(v.type&&!ds[p+"_pl"]&&!ds[p+"_vl"]){if(v.type==="pl")ds[p+"_pl"]=true;if(v.type==="vl")ds[p+"_vl"]=true;}
+    };
+    if(colUsed(ds0,"b"))applyV("b_dep");
+    if(colUsed(ds0,"d"))applyV("d_dep");
+    const actUsed=ds0["c_travail_chk"]||ds0["c_autre_chk"]||(ds0["c_deb_hh"]!==undefined&&ds0["c_deb_hh"]!=="");
+    if(actUsed){if(v.machine&&!ds["c_machine"])ds["c_machine"]=v.machine;if(v.plaque&&!ds["c_plaque"])ds["c_plaque"]=v.plaque;}
     // date d/m/y
     drawTextAt(rmap.date_d,two(dt.getDate()),9);
     drawTextAt(rmap.date_m,two(dt.getMonth()+1),9);
@@ -789,6 +902,8 @@ function bind(){
   document.querySelectorAll("[data-toggle]").forEach(h=>h.onclick=()=>h.parentElement.classList.toggle("open"));
   ["nom","prenom","adr1","adr2"].forEach(f=>{
     $("#id_"+f).oninput=e=>{store.identity[f]=e.target.value;saveStore();};});
+  $("#veh_machine").oninput=e=>{store.vehicle.machine=e.target.value;saveStore();};
+  $("#veh_plaque").oninput=e=>{store.vehicle.plaque=e.target.value;saveStore();};
   $("#week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
   $("#week_monday").onchange=e=>{
     const iso=fmtISO(isoMonday(new Date(e.target.value+"T12:00:00")));
@@ -835,12 +950,25 @@ function bind(){
 
 // ---------- init ----------
 function init(){
-  loadIdentityUI();refreshWeekUI();renderDays();bind();
+  loadIdentityUI();loadVehicleUI();refreshWeekUI();renderDays();bind();
   document.getElementById("recap_month_input").value=defaultMonth();
-  $("#status").textContent="Prêt · sauvegarde automatique";
+  $("#status").textContent="Prêt · sauvegarde auto · v"+APP_VERSION;
+  const av=document.getElementById("app_ver");if(av)av.textContent=APP_VERSION;
+  const bu=document.getElementById("btn_update");if(bu)bu.onclick=forceUpdate;
   $("#btn_pdf").disabled=false;
   if(canShareFiles()){$("#btn_share").disabled=false;}
   else{$("#btn_share").style.display="none";}
+}
+async function forceUpdate(){
+  if(!confirm("Vider le cache et recharger la dernière version ?\n(si l'appli est hébergée, une connexion Internet est nécessaire)"))return;
+  try{
+    if("serviceWorker" in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.unregister()));
+    }
+    if(window.caches){const keys=await caches.keys();await Promise.all(keys.map(k=>caches.delete(k)));}
+  }catch(e){}
+  location.reload(true);
 }
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});
