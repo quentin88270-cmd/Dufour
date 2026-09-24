@@ -69,6 +69,27 @@ input[type=time].timepick:focus{border-color:var(--bordeaux)}
 .vehrow .vtype{font-size:10px;font-weight:800;color:#fff;background:var(--bordeaux);border-radius:20px;padding:2px 8px}
 .vehrow .vdel{border:none;background:transparent;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px}
 select.dayveh{max-width:100%;font-weight:600;color:var(--bordeaux);border-color:var(--line)}
+.maintabs{position:sticky;top:0;z-index:19;display:flex;background:#fff;border-bottom:1px solid var(--line);
+  box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.maintabs .mtab{flex:1;padding:11px 4px;border:none;background:transparent;font-size:12.5px;font-weight:800;
+  color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+.maintabs .mtab.on{color:var(--bordeaux);border-bottom-color:var(--bordeaux)}
+.frais-day .amt{position:relative}
+.frais-day .amt .eurosuf{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+.frais-day .amt input{padding-right:22px;text-align:right}
+.daytot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.daytot b{color:var(--bordeaux)}
+.justif-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:10px}
+.justif-grid .jt{position:relative;border:1px solid var(--line);border-radius:8px;overflow:hidden;aspect-ratio:1/1;background:#f4efe9}
+.justif-grid .jt img{width:100%;height:100%;object-fit:cover;display:block}
+.justif-grid .jt .jdel{position:absolute;top:2px;right:2px;background:rgba(139,26,43,.92);color:#fff;border:none;
+  border-radius:50%;width:22px;height:22px;font-size:13px;line-height:1;cursor:pointer}
+.sigwrap{position:relative;margin-top:4px}
+.sigpad{width:100%;height:auto;aspect-ratio:600/180;border:1px dashed var(--line);border-radius:10px;
+  background:#fff;display:block;touch-action:none;cursor:crosshair}
+.sig-clear{position:absolute;top:6px;right:6px;background:#f1ede8;border:1px solid var(--line);color:var(--bordeaux);
+  border-radius:8px;font-size:12px;font-weight:700;padding:4px 9px;cursor:pointer}
+.sig-status{color:var(--ok);font-weight:800;font-size:11px;margin-left:6px}
 .chk{display:flex;align-items:center;gap:9px;padding:7px 2px;font-size:14px}
 .chk input{width:20px;height:20px;accent-color:var(--bordeaux);flex:0 0 auto}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
@@ -139,7 +160,13 @@ table.recap td.big{font-weight:800;color:var(--ink)}
   <div class="sub">DUFOUR CELTIC LEVAGE · saisie hebdomadaire hors-ligne</div>
 </header>
 
-<div class="wrap">
+<nav class="maintabs" id="maintabs">
+  <button class="mtab on" data-tab="heures">🕑 Mes heures</button>
+  <button class="mtab" data-tab="frais">💶 Mes frais</button>
+  <button class="mtab" data-tab="chantiers">🏗 Mes chantiers</button>
+</nav>
+
+<div class="wrap" id="view-heures">
 
   <!-- MON PROFIL -->
   <div class="card" id="card-profile">
@@ -232,6 +259,105 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
 </div>
 
+<div class="wrap" id="view-frais" style="display:none">
+  <div class="card" id="card-frais-profile">
+    <div class="hd" data-toggle>👤 Profil frais <span class="chev">▶</span></div>
+    <div class="bd">
+      <p class="hint" style="margin-top:0">Enregistré en permanence sur cet appareil. Sert uniquement à la note de frais (le destinataire n'est pas le même que pour les heures).</p>
+      <div class="row">
+        <div class="col"><label class="fl">Nom</label><input type="text" id="fp_nom" placeholder="Ton nom"></div>
+        <div class="col"><label class="fl">Prénom</label><input type="text" id="fp_prenom" placeholder="Ton prénom"></div>
+      </div>
+      <label class="fl">Société</label><input type="text" id="fp_societe" placeholder="ex. MEDIACO LORRAINE">
+      <label class="fl">Véhicule et plaque</label><input type="text" id="fp_vehicule" placeholder="ex. ATF 40G2 · GT-990-PT">
+      <label class="fl">N° compte de remboursement (IBAN)</label><input type="text" id="fp_iban" placeholder="FR76 …">
+      <label class="fl">BIC</label><input type="text" id="fp_bic" placeholder="ex. BNPAFRPP">
+      <label class="fl">Signature de l'opérateur <span id="sig_status" class="sig-status"></span></label>
+      <div class="sigwrap">
+        <canvas id="sig_pad" class="sigpad" width="600" height="180"></canvas>
+        <button type="button" id="sig_clear" class="sig-clear">Effacer</button>
+      </div>
+      <p class="hint" style="margin-top:4px">Signe une fois avec le doigt : elle est mémorisée et apposée sur la note de frais.</p>
+    </div>
+  </div>
+
+  <div class="card open" id="card-frais-week">
+    <div class="hd" data-toggle>🗓 Semaine <span class="chev">▶</span></div>
+    <div class="bd">
+      <label class="fl">Semaine</label>
+      <select id="frais_week_select" class="week-select"></select>
+      <p class="hint" id="frais_week_range"></p>
+    </div>
+  </div>
+
+  <div id="frais-days"></div>
+  <div class="card"><div class="bd" style="display:block;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>Total des frais soumis</b><b id="frais_total" style="font-size:18px;color:var(--bordeaux)">0,00 €</b>
+    </div>
+    <p class="hint" style="margin-top:6px">Total de la semaine, reporté en bas de la note de frais.</p>
+  </div></div>
+  <div class="card open" id="card-justifs">
+    <div class="hd" data-toggle>📎 Justificatifs <span class="chev">▶</span></div>
+    <div class="bd">
+      <p class="hint" style="margin-top:0">Ajoute les photos de tickets/reçus de la semaine. Elles sont jointes en pages à la fin de la note de frais (PDF).</p>
+      <input type="file" id="justif_input" accept="image/*" multiple style="display:none">
+      <button class="btn ghost" id="justif_add" style="width:100%">📷 Ajouter une photo</button>
+      <div id="justif_grid" class="justif-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" id="view-chantiers" style="display:none">
+  <div class="card open" id="card-bon-week">
+    <div class="hd" data-toggle>🗓 Semaine <span class="chev">▶</span></div>
+    <div class="bd">
+      <label class="fl">Semaine</label>
+      <select id="bon_week_select" class="week-select"></select>
+      <p class="hint" id="bon_week_range"></p>
+    </div>
+  </div>
+
+  <div class="card open" id="card-bon-materiel">
+    <div class="hd" data-toggle>🔧 Matériel &amp; chantier <span class="chev">▶</span></div>
+    <div class="bd">
+      <label class="fl">N° du bon (DUF)</label><input type="text" id="bon_numduf" placeholder="ex. 143302" inputmode="numeric">
+      <div class="subttl" style="margin-top:12px">Matériel</div>
+      <div class="row">
+        <div class="col"><label class="fl">Machine</label><input type="text" id="bm_machine"></div>
+        <div class="col"><label class="fl">Plaque</label><input type="text" id="bm_plaque"></div>
+      </div>
+      <label class="fl">Opérateur</label><input type="text" id="bm_operateur">
+      <label class="fl">Accessoires · Matériel supplémentaire</label><textarea id="bm_accessoires" rows="2"></textarea>
+      <div class="subttl">Chantier</div>
+      <div class="row">
+        <div class="col"><label class="fl">Nom client</label><input type="text" id="bc_client"></div>
+        <div class="col" style="max-width:150px"><label class="fl">Réf.</label><input type="text" id="bc_ref"></div>
+      </div>
+      <label class="fl">Adresse chantier</label><input type="text" id="bc_adresse">
+      <div class="row">
+        <div class="col"><label class="fl">Contact</label><input type="text" id="bc_contact"></div>
+        <div class="col" style="max-width:170px"><label class="fl">Tél.</label><input type="text" id="bc_tel" inputmode="tel"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bon-days"></div>
+
+  <div class="card open" id="card-bon-sign">
+    <div class="hd" data-toggle>✍️ Signatures client <span class="chev">▶</span></div>
+    <div class="bd">
+      <label class="fl">Prise en charge — AVANT exécution <span id="bon_sig_avant_status" class="sig-status"></span></label>
+      <div class="sigwrap"><canvas id="bon_sig_avant" class="sigpad" width="600" height="180"></canvas>
+        <button type="button" id="bon_sig_avant_clear" class="sig-clear">Effacer</button></div>
+      <label class="fl" style="margin-top:12px">Clôture — APRÈS exécution <span id="bon_sig_apres_status" class="sig-status"></span></label>
+      <div class="sigwrap"><canvas id="bon_sig_apres" class="sigpad" width="600" height="180"></canvas>
+        <button type="button" id="bon_sig_apres_clear" class="sig-clear">Effacer</button></div>
+      <p class="hint" style="margin-top:6px">La signature « avant » se prend au démarrage, la « après » pour clôturer le bon. Les deux sont enregistrées sur la note.</p>
+    </div>
+  </div>
+</div>
+
 <div class="bar">
   <div class="status" id="status">Chargement…</div>
   <button class="btn ghost" id="btn_share" disabled>Partager</button>
@@ -272,13 +398,15 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="1.9";
+const APP_VERSION="2.6";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
 function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{weeks:{},current:null,identity:null};}
   catch(e){return {weeks:{},current:null,identity:null};}}
-function saveStore(){localStorage.setItem(LS_KEY,JSON.stringify(store));}
+function saveStore(){try{localStorage.setItem(LS_KEY,JSON.stringify(store));return true;}
+  catch(e){try{toast("Stockage plein — sauvegarde impossible. Supprime d'anciennes semaines/justificatifs.");}catch(_){}
+    return false;}}
 let store=loadStore();
 if(!store.identity) store.identity=Object.assign({},DEFAULT_ID);
 // vehicles: list of {id,machine,plaque,type}
@@ -288,6 +416,7 @@ if(store.vehicle && !store.vehicles){
   delete store.vehicle;saveStore();
 }
 if(!store.vehicles) store.vehicles=[];
+if(!store.fraisProfile) store.fraisProfile={nom:"",prenom:"",societe:"",vehicule:"",iban:"",bic:""};
 
 function isoMonday(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);
   x.setHours(12,0,0,0);return x;}
@@ -821,7 +950,23 @@ function refreshWeekUI(){
   const mon=new Date(curWeek().monday+"T12:00:00");const sun=new Date(mon);sun.setDate(sun.getDate()+6);
   $("#week_range").textContent="Semaine "+isoWeekNum(mon)+" · du "+
     two(mon.getDate())+"/"+two(mon.getMonth()+1)+" au "+two(sun.getDate())+"/"+two(sun.getMonth()+1)+"/"+sun.getFullYear();
+  const fsel=$("#frais_week_select");
+  if(fsel){fsel.innerHTML="";
+    Object.keys(store.weeks).sort().reverse().forEach(m=>{const d=new Date(m+"T12:00:00");
+      fsel.appendChild(new Option("S"+isoWeekNum(d)+" — sem. du "+m.split("-").reverse().join("/"),m));});
+    fsel.value=store.current;
+    $("#frais_week_range").textContent="Semaine "+isoWeekNum(mon)+" · du "+
+      two(mon.getDate())+"/"+two(mon.getMonth()+1)+" au "+two(sun.getDate())+"/"+two(sun.getMonth()+1)+"/"+sun.getFullYear();}
   refreshRecapIfOpen();
+  if(currentTab==="frais")renderFrais();
+  const bsel=$("#bon_week_select");
+  if(bsel){bsel.innerHTML="";
+    Object.keys(store.weeks).sort().reverse().forEach(m=>{const d=new Date(m+"T12:00:00");
+      bsel.appendChild(new Option("S"+isoWeekNum(d)+" — sem. du "+m.split("-").reverse().join("/"),m));});
+    bsel.value=store.current;
+    $("#bon_week_range").textContent="Semaine "+isoWeekNum(mon)+" · du "+
+      two(mon.getDate())+"/"+two(mon.getMonth()+1)+" au "+two(sun.getDate())+"/"+two(sun.getMonth()+1)+"/"+sun.getFullYear();}
+  if(currentTab==="chantiers"){loadBonMaterielUI();renderBon();reloadSigPads();}
 }
 function loadIdentityUI(){$("#id_nom").value=store.identity.nom||"";$("#id_prenom").value=store.identity.prenom||"";
   $("#id_adr1").value=store.identity.adr1||"";$("#id_adr2").value=store.identity.adr2||"";}
@@ -854,6 +999,360 @@ function addVehicle(){
   store.vehicles.push({id:vehUid(),machine:m,plaque:p,type:t});saveStore();
   $("#veh_new_machine").value="";$("#veh_new_plaque").value="";$("#veh_new_type").value="";
   renderVehicleList();renderDays();toast("Véhicule ajouté");
+}
+
+// ---------- tabs ----------
+let currentTab="heures";
+function switchTab(name){
+  currentTab=name;
+  document.getElementById("view-heures").style.display=(name==="heures")?"":"none";
+  document.getElementById("view-frais").style.display=(name==="frais")?"":"none";
+  document.getElementById("view-chantiers").style.display=(name==="chantiers")?"":"none";
+  document.querySelectorAll("#maintabs .mtab").forEach(b=>b.classList.toggle("on",b.dataset.tab===name));
+  const pdf=document.getElementById("btn_pdf");
+  if(pdf)pdf.textContent=(name==="frais")?"Enregistrer la note":(name==="chantiers")?"Enregistrer le bon":"Enregistrer le PDF";
+  if(name==="frais"){renderFrais();
+    if(!(store.fraisProfile.nom||store.fraisProfile.prenom||store.fraisProfile.iban)){
+      const c=document.getElementById("card-frais-profile");if(c)c.classList.add("open");}}
+  if(name==="chantiers"){loadBonMaterielUI();renderBon();reloadSigPads();}
+}
+
+// ---------- frais data ----------
+function fraisWeek(){const w=curWeek();if(!w.frais)w.frais={days:{}};return w.frais;}
+function fraisDay(k){const f=fraisWeek();if(!f.days[k])f.days[k]={};return f.days[k];}
+const FRAIS_FIELDS=[["repas","Repas"],["peages","Péages"],["logement","Logement"],["gasoil","Gasoil"],["fraisveh","Frais véhicule"]];
+function numFR(v){if(v===undefined||v===null||v==="")return 0;const n=parseFloat(String(v).replace(",","."));return isNaN(n)?0:n;}
+function eur(v){if(v===undefined||v===null||v==="")return "";const n=parseFloat(String(v).replace(",","."));if(isNaN(n))return String(v);return n.toFixed(2).replace(".",",");}
+function fraisDayTotal(d){let t=0;FRAIS_FIELDS.forEach(([k])=>t+=numFR(d[k]));return t;}
+function fraisWeekTotal(){let t=0;DAYS.forEach(([k])=>t+=fraisDayTotal(fraisDay(k)));return t;}
+
+function loadFraisProfileUI(){
+  const p=store.fraisProfile;
+  $("#fp_nom").value=p.nom||"";$("#fp_prenom").value=p.prenom||"";$("#fp_societe").value=p.societe||"";
+  $("#fp_vehicule").value=p.vehicule||"";$("#fp_iban").value=p.iban||"";$("#fp_bic").value=p.bic||"";
+}
+function setupSigPad(canvasId,clearId,getVal,setVal,statusId){
+  const cv=document.getElementById(canvasId);if(!cv)return null;
+  if(cv._reload)return cv._reload;
+  const ctx=cv.getContext("2d");ctx.lineWidth=2.6;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#16181d";
+  let drawing=false,last=null;
+  function status(){const s=statusId&&document.getElementById(statusId);if(s)s.textContent=getVal()?"✓ Enregistrée":"";}
+  function pos(e){const r=cv.getBoundingClientRect();const t=(e.touches&&e.touches[0])||e;
+    return {x:(t.clientX-r.left)*(cv.width/r.width),y:(t.clientY-r.top)*(cv.height/r.height)};}
+  function start(e){e.preventDefault();drawing=true;last=pos(e);}
+  function move(e){if(!drawing)return;e.preventDefault();const p2=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();last=p2;}
+  function end(){if(!drawing)return;drawing=false;setVal(cv.toDataURL("image/png"));status();}
+  cv.addEventListener("pointerdown",start);cv.addEventListener("pointermove",move);
+  cv.addEventListener("pointerup",end);cv.addEventListener("pointerleave",end);
+  const reload=()=>{ctx.clearRect(0,0,cv.width,cv.height);const v=getVal();if(v){const im=new Image();im.onload=()=>ctx.drawImage(im,0,0,cv.width,cv.height);im.src=v;}status();};
+  cv._reload=reload;
+  const clr=document.getElementById(clearId);if(clr)clr.onclick=()=>{ctx.clearRect(0,0,cv.width,cv.height);setVal("");status();};
+  reload();return reload;
+}
+function initSignaturePads(){
+  setupSigPad("sig_pad","sig_clear",()=>store.fraisProfile.signature,v=>{if(v)store.fraisProfile.signature=v;else delete store.fraisProfile.signature;saveStore();},"sig_status");
+  setupSigPad("bon_sig_avant","bon_sig_avant_clear",()=>bonData().sigAvant,v=>{bonData().sigAvant=v;saveStore();},"bon_sig_avant_status");
+  setupSigPad("bon_sig_apres","bon_sig_apres_clear",()=>bonData().sigApres,v=>{bonData().sigApres=v;saveStore();},"bon_sig_apres_status");
+}
+function reloadSigPads(){["sig_pad","bon_sig_avant","bon_sig_apres"].forEach(id=>{const c=document.getElementById(id);if(c&&c._reload)c._reload();});}
+function renderFrais(){
+  const root=document.getElementById("frais-days");if(!root)return;root.innerHTML="";
+  DAYS.forEach(([k,label],idx)=>{
+    const d=fraisDay(k);const dt=dayDate(curWeek().monday,idx);
+    const dstr=two(dt.getDate())+"/"+two(dt.getMonth()+1)+"/"+String(dt.getFullYear()).slice(2);
+    const card=el("div","card frais-day");if(openDays["f_"+k])card.classList.add("open");
+    const hd=el("div","hd");
+    hd.innerHTML='<span class="daytitle">'+label+' <span class="d">'+dstr+'</span></span>';
+    const right=el("span");const tot=el("span","mini");tot.id="ftot_"+k;
+    const dtv=fraisDayTotal(d);tot.textContent=dtv>0?(dtv.toFixed(2).replace(".",",")+" €"):"";
+    right.appendChild(tot);const chev=el("span","chev","▶");chev.style.marginLeft="8px";right.appendChild(chev);
+    hd.appendChild(right);
+    hd.onclick=()=>{card.classList.toggle("open");openDays["f_"+k]=card.classList.contains("open");};
+    const bd=el("div","bd");
+    const mkText=(lab,key,ph)=>{const w=el("div");w.appendChild(el("label","fl",lab));
+      const i=el("input");i.type="text";i.value=d[key]||"";if(ph)i.placeholder=ph;
+      i.oninput=()=>{d[key]=i.value;markDirty();};w.appendChild(i);return w;};
+    bd.appendChild(mkText("Client","client"));
+    bd.appendChild(mkText("Ville / Chantier","ville"));
+    bd.appendChild(mkText("Personne(s) supplémentaire(s)","persons"));
+    bd.appendChild(el("div","subttl","Frais du jour (€)"));
+    const grid=el("div","tri");
+    FRAIS_FIELDS.forEach(([key,lab])=>{
+      const c=el("div","amt");c.appendChild(el("label","fl",lab));
+      const wrap=el("div","amt");
+      const i=el("input");i.type="text";i.inputMode="decimal";i.value=d[key]||"";
+      i.oninput=()=>{d[key]=i.value;markDirty();updateFraisTotals(k);};
+      const suf=el("span","eurosuf","€");
+      wrap.appendChild(i);wrap.appendChild(suf);c.appendChild(wrap);grid.appendChild(c);
+    });
+    bd.appendChild(grid);
+    const dtot=el("div","daytot");dtot.innerHTML='<span>Total du jour</span>';
+    const b=el("b");b.id="fdaytot_"+k;b.textContent=(dtv>0?dtv.toFixed(2).replace(".",","):"0,00")+" €";
+    dtot.appendChild(b);bd.appendChild(dtot);
+    card.appendChild(hd);card.appendChild(bd);root.appendChild(card);
+  });
+  updateFraisTotals();
+  renderJustifs();
+}
+function updateFraisTotals(k){
+  if(k){const d=fraisDay(k);const dv=fraisDayTotal(d);
+    const b=document.getElementById("fdaytot_"+k);if(b)b.textContent=(dv?dv.toFixed(2).replace(".",","):"0,00")+" €";
+    const t=document.getElementById("ftot_"+k);if(t)t.textContent=dv>0?(dv.toFixed(2).replace(".",",")+" €"):"";}
+  const wt=fraisWeekTotal();const el2=document.getElementById("frais_total");
+  if(el2)el2.textContent=wt.toFixed(2).replace(".",",")+" €";
+}
+
+// ---------- justificatifs (IndexedDB) ----------
+const IDB_NAME="fdp_justifs",IDB_STORE="img";
+function idbOpen(){return new Promise((res,rej)=>{try{const r=indexedDB.open(IDB_NAME,1);
+  r.onupgradeneeded=()=>{r.result.createObjectStore(IDB_STORE);};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}catch(e){rej(e);}});}
+async function idbPut(id,blob){const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,"readwrite");tx.objectStore(IDB_STORE).put(blob,id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}
+async function idbGet(id){const db=await idbOpen();return new Promise((res,rej)=>{const tx=db.transaction(IDB_STORE,"readonly");const rq=tx.objectStore(IDB_STORE).get(id);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>rej(rq.error);});}
+async function idbDel(id){try{const db=await idbOpen();return new Promise((res)=>{const tx=db.transaction(IDB_STORE,"readwrite");tx.objectStore(IDB_STORE).delete(id);tx.oncomplete=()=>res();tx.onerror=()=>res();});}catch(e){}}
+function fileToJpeg(file,maxDim,quality){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);const img=new Image();
+    img.onload=()=>{let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height;
+      const sc=Math.min(1,maxDim/Math.max(w,h));const cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc));
+      const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
+      cv.getContext("2d").drawImage(img,0,0,cw,ch);URL.revokeObjectURL(url);
+      cv.toBlob(b=>{if(!b){rej(new Error("conversion impossible"));return;}
+        const ts=140,s2=Math.min(1,ts/Math.max(cw,ch));const tc=document.createElement("canvas");
+        tc.width=Math.max(1,Math.round(cw*s2));tc.height=Math.max(1,Math.round(ch*s2));
+        tc.getContext("2d").drawImage(cv,0,0,tc.width,tc.height);
+        res({blob:b,thumb:tc.toDataURL("image/jpeg",0.6)});
+      },"image/jpeg",quality||0.82);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("format non supporté"));};
+    img.src=url;
+  });
+}
+async function addJustifs(files){
+  const f=fraisWeek();if(!f.justifs)f.justifs=[];
+  let ok=0;
+  for(const file of files){
+    if(!/^image\//.test(file.type||"")&&!/\.(jpe?g|png|heic|heif|webp)$/i.test(file.name||"")){continue;}
+    try{const {blob,thumb}=await fileToJpeg(file,1600,0.82);
+      const id="j"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      await idbPut(id,blob);f.justifs.push({id:id,thumb:thumb,name:file.name||"photo"});ok++;saveStore();renderJustifs();
+    }catch(e){toast("Photo ignorée : "+e.message);}
+  }
+  if(ok)toast(ok+" justificatif"+(ok>1?"s":"")+" ajouté"+(ok>1?"s":""));
+}
+function renderJustifs(){
+  const grid=document.getElementById("justif_grid");if(!grid)return;grid.innerHTML="";
+  const f=fraisWeek();const js=f.justifs||[];
+  js.forEach(j=>{
+    const cell=el("div","jt");
+    const im=el("img");im.src=j.thumb||"";im.alt=j.name||"";cell.appendChild(im);
+    const del=el("button","jdel","✕");del.type="button";del.title="Supprimer";
+    del.onclick=()=>{if(confirm("Supprimer ce justificatif ?")){idbDel(j.id);f.justifs=f.justifs.filter(x=>x.id!==j.id);saveStore();renderJustifs();}};
+    cell.appendChild(del);grid.appendChild(cell);
+  });
+}
+
+// ---------- frais PDF ----------
+async function buildFraisPDF(){
+  const {PDFDocument,StandardFonts,rgb}=PDFLib;
+  const doc=await PDFDocument.create();
+  const page=doc.addPage([595.28,841.89]);
+  const F=await doc.embedFont(StandardFonts.Helvetica);
+  const B=await doc.embedFont(StandardFonts.HelveticaBold);
+  const BX=rgb(0.545,0.102,0.169),INK=rgb(0.10,0.10,0.12),GREY=rgb(0.45,0.45,0.47),LINE=rgb(0.80,0.78,0.76);
+  const W=595.28,H=841.89,M=26,right=W-M;
+  const T=(s,x,yy,sz,f,c)=>{if(s===undefined||s===null||s==="")return;page.drawText(String(s),{x,y:yy,size:sz,font:f||F,color:c||INK});};
+  const Tr=(s,x,yy,sz,f,c)=>{if(s===undefined||s===null||s==="")return;const w=(f||F).widthOfTextAtSize(String(s),sz);T(s,x-w,yy,sz,f,c);};
+  const box=(x,yy,w,h,opt)=>{opt=opt||{};page.drawRectangle({x,y:yy,width:w,height:h,borderColor:opt.bc||LINE,borderWidth:opt.bw==null?0.8:opt.bw,color:opt.fill});};
+  const label=(s,x,yy)=>T(s,x,yy,6.5,F,GREY);
+  const vline=(x,y1,y2)=>page.drawLine({start:{x,y:y1},end:{x,y:y2},thickness:0.8,color:LINE});
+  const p=store.fraisProfile;const monday=curWeek().monday;
+  let y=H-M;
+  T("NOTE DE FRAIS",M+2,y-26,26,B,BX);Tr("DUFNF°41702",right,y-24,14,B,BX);
+  y-=42;page.drawRectangle({x:M,y:y-3,width:W-2*M,height:2.4,color:BX});y-=18;
+  const secLabel=(n,txt,yy)=>{page.drawRectangle({x:M,y:yy-13,width:118,height:17,color:BX});T(n,M+7,yy-10,9,B,rgb(1,1,1));T(txt,M+22,yy-10,10.5,B,rgb(1,1,1));};
+  secLabel("1","RESSOURCES",y);
+  label("Date",right-150,y-4);box(right-118,y-16,118,20);
+  const md=new Date(monday+"T12:00:00");
+  T(two(md.getDate()),right-96,y-11,9,F);T("/",right-78,y-11,10,F,GREY);T(two(md.getMonth()+1),right-64,y-11,9,F);T("/",right-40,y-11,10,F,GREY);T(String(md.getFullYear()),right-32,y-11,9,F);
+  y-=26;
+  const colL=M,colLW=300,colR=M+312,colRW=W-2*M-312;
+  label("Opérateur",colL,y+2);box(colL,y-20,colLW,20);T(((p.nom||"")+" "+(p.prenom||"")).trim(),colL+6,y-14,10,B);
+  label("Société",colR,y+2);box(colR,y-20,colRW,20);T(p.societe||"",colR+6,y-14,10,F);
+  y-=28;label("Véhicule et plaque",colL,y+2);box(colL,y-20,W-2*M,20);T(p.vehicule||"",colL+6,y-14,10,F);
+  y-=28;label("n° compte de remboursement",colL,y+2);box(colL,y-20,colLW,20);T(p.iban||"",colL+6,y-14,9.5,F);
+  label("BIC",colR,y+2);box(colR,y-20,colRW,20);T(p.bic||"",colR+6,y-14,10,F);
+  y-=30;
+  secLabel("2","FRAIS EXPOSÉS",y);T("Uniquement admis en cas de délogement de + de 24H",M+150,y-10,7.5,F,GREY);y-=24;
+  const bx=M,bw=W-2*M,upH=30,dnH=26,gap=6;const cellW=bw/6;
+  let grand=0;const abbr=["LUN.","MAR.","MER.","JEU.","VEN.","SAM.","DIM."];
+  DAYS.forEach(([k],idx)=>{
+    const d=fraisDay(k);const top=y;
+    box(bx,top-upH,bw,upH);[95,95+165,95+165+140].forEach(dx=>vline(bx+dx,top,top-upH));
+    label("Date",bx+28,top-9);label("Client",bx+95+70,top-9);label("Ville / Chantier",bx+95+165+45,top-9);label("Personne(s) supplémentaire(s)",bx+95+165+140+18,top-9);
+    T(abbr[idx],bx+5,top-24,10,B,BX);
+    const dt=dayDate(monday,idx);
+    T(two(dt.getDate())+" / "+two(dt.getMonth()+1)+" / "+String(dt.getFullYear()).slice(2),bx+30,top-24,8,F,GREY);
+    T(d.client||"",bx+100,top-19,9,F);T(d.ville||"",bx+95+170,top-19,9,F);T(d.persons||"",bx+95+165+145,top-19,8.5,F);
+    const ry=top-upH;box(bx,ry-dnH,bw,dnH);for(let i=1;i<6;i++)vline(bx+i*cellW,ry,ry-dnH);
+    const labs=["Repas","Péages","Logement","Gasoil","Frais véhicule"];const keys=["repas","peages","logement","gasoil","fraisveh"];
+    labs.forEach((lab,i)=>{label(lab,bx+i*cellW+5,ry-9);T("€",bx+(i+1)*cellW-12,ry-20,8,F,GREY);Tr(eur(d[keys[i]]),bx+(i+1)*cellW-15,ry-19,9,F);});
+    page.drawRectangle({x:bx+5*cellW,y:ry-dnH,width:cellW,height:dnH,color:rgb(0.97,0.94,0.93)});box(bx+5*cellW,ry-dnH,cellW,dnH);
+    T("TOTAL JOUR",bx+5*cellW+8,ry-11,7,B,BX);T("€",bx+6*cellW-12,ry-22,8,F,GREY);
+    const dtot=fraisDayTotal(d);if(dtot>0){Tr(dtot.toFixed(2).replace(".",","),bx+6*cellW-15,ry-21,9.5,B);grand+=dtot;}
+    y=ry-dnH-gap;
+  });
+  y-=4;const fH=64,fw=(bw-16)/3;
+  box(bx,y-fH,fw,fH);T("Nom, prénom et signature du responsable",bx+5,y-11,7,B,GREY);
+  box(bx+fw+8,y-fH,fw,fH);T("Nom, prénom et signature de l'opérateur",bx+fw+13,y-11,7,B,GREY);
+  T(((p.nom||"")+" "+(p.prenom||"")).trim(),bx+fw+13,y-26,9.5,B);
+  if(p.signature){try{const sb=b64ToBytes(p.signature.split(",")[1]);const sig=await doc.embedPng(sb);
+    const sw=fw-26,sh=fH-40;const ssc=Math.min(sw/sig.width,sh/sig.height);
+    const dw=sig.width*ssc,dh=sig.height*ssc;
+    page.drawImage(sig,{x:bx+fw+13,y:y-fH+6,width:dw,height:dh});}catch(e){}}
+  const tx=bx+2*(fw+8);box(tx,y-fH,fw,fH);
+  T("Total des frais soumis",tx+5,y-11,7.5,B,BX);T("€",tx+fw-12,y-11,9,F,GREY);
+  if(grand>0)Tr(grand.toFixed(2).replace(".",","),tx+fw-16,y-11,10,B);
+  T("Remarques",tx+5,y-30,7,F,GREY);
+  page.drawLine({start:{x:tx+5,y:y-40},end:{x:tx+fw-5,y:y-40},thickness:0.5,color:LINE});
+  page.drawLine({start:{x:tx+5,y:y-52},end:{x:tx+fw-5,y:y-52},thickness:0.5,color:LINE});
+  // ---- justificatifs en pages ----
+  const jf=(curWeek().frais&&curWeek().frais.justifs)||[];
+  for(let i=0;i<jf.length;i++){
+    let blob;try{blob=await idbGet(jf[i].id);}catch(e){blob=null;}
+    if(!blob)continue;
+    let imgBytes;try{imgBytes=new Uint8Array(await blob.arrayBuffer());}catch(e){continue;}
+    let img=null;try{img=await doc.embedJpg(imgBytes);}catch(e){try{img=await doc.embedPng(imgBytes);}catch(e2){img=null;}}
+    if(!img)continue;
+    const pg=doc.addPage([595.28,841.89]);
+    pg.drawText("Justificatif "+(i+1)+" / "+jf.length,{x:26,y:812,size:11,font:B,color:BX});
+    const availW=595.28-52,availH=841.89-96;
+    const sc=Math.min(availW/img.width,availH/img.height);
+    const dw=img.width*sc,dh=img.height*sc;
+    pg.drawImage(img,{x:(595.28-dw)/2,y:(841.89-70-dh),width:dw,height:dh});
+  }
+  const bytes=await doc.save();
+  const mon=new Date(monday+"T12:00:00");
+  return {bytes:bytes,fname:"NoteDeFrais_S"+two(isoWeekNum(mon))+"_"+mon.getFullYear()+".pdf"};
+}
+
+// ---------- chantiers (bon de travail) ----------
+function bonData(){const w=curWeek();if(!w.bon){w.bon={materiel:{},chantier:{},days:{}};
+  w.bon.materiel.operateur=((store.identity.nom||"")+" "+(store.identity.prenom||"")).trim();
+  if(store.vehicles[0]){w.bon.materiel.machine=store.vehicles[0].machine||"";w.bon.materiel.plaque=store.vehicles[0].plaque||"";}
+  saveStore();}
+  if(!w.bon.materiel)w.bon.materiel={};if(!w.bon.chantier)w.bon.chantier={};if(!w.bon.days)w.bon.days={};
+  return w.bon;}
+function bonDay(k){const b=bonData();if(!b.days[k])b.days[k]={};return b.days[k];}
+function hm2min(s){if(!s)return null;const m=String(s).match(/^(\d{1,2}):(\d{2})$/);if(!m)return null;return (+m[1])*60+(+m[2]);}
+function durMin(s){if(!s)return 0;const m=String(s).match(/^(\d{1,2}):(\d{2})$/);if(m)return (+m[1])*60+(+m[2]);const n=parseInt(s,10);return isNaN(n)?0:n;}
+function bonDayTotal(d){const dep=hm2min(d.departdepot),ret=hm2min(d.retourdepot);if(dep==null||ret==null)return null;
+  let span=ret-dep;if(span<0)span+=1440;let t=span-durMin(d.repas);if(t<0)t=0;return t;}
+function minHM(m){if(m==null)return "";return Math.floor(m/60)+":"+two(m%60);}
+function loadBonMaterielUI(){
+  const b=bonData();const m=b.materiel,c=b.chantier;
+  $("#bon_numduf").value=b.numduf||"";
+  $("#bm_machine").value=m.machine||"";$("#bm_plaque").value=m.plaque||"";$("#bm_operateur").value=m.operateur||"";$("#bm_accessoires").value=m.accessoires||"";
+  $("#bc_client").value=c.client||"";$("#bc_ref").value=c.ref||"";$("#bc_adresse").value=c.adresse||"";$("#bc_contact").value=c.contact||"";$("#bc_tel").value=c.tel||"";
+}
+function bonTimeInput(d,key){
+  const i=el("input");i.type="time";i.step="60";i.className="timepick";
+  if(d[key])i.value=d[key];
+  i.onchange=i.oninput=()=>{d[key]=i.value;markDirty();updateBonTotal(d,key);};
+  return i;
+}
+function renderBon(){
+  const root=document.getElementById("bon-days");if(!root)return;root.innerHTML="";
+  DAYS.forEach(([k,label],idx)=>{
+    const d=bonDay(k);const dt=dayDate(curWeek().monday,idx);
+    const dstr=two(dt.getDate())+"/"+two(dt.getMonth()+1)+"/"+String(dt.getFullYear()).slice(2);
+    const card=el("div","card");if(openDays["b_"+k])card.classList.add("open");
+    const hd=el("div","hd");hd.innerHTML='<span class="daytitle">'+label+' <span class="d">'+dstr+'</span></span>';
+    const right=el("span");const tt=el("span","mini");tt.id="btot_"+k;const bt=bonDayTotal(d);tt.textContent=bt!=null?("Total "+minHM(bt)):"";
+    right.appendChild(tt);const chev=el("span","chev","▶");chev.style.marginLeft="8px";right.appendChild(chev);hd.appendChild(right);
+    hd.onclick=()=>{card.classList.toggle("open");openDays["b_"+k]=card.classList.contains("open");};
+    const bd=el("div","bd");
+    const pair=(l1,k1,l2,k2)=>{const row=el("div","row");
+      const a=el("div","col");a.appendChild(el("label","fl",l1));a.appendChild(bonTimeInput(d,k1));
+      const b2=el("div","col");b2.appendChild(el("label","fl",l2));b2.appendChild(bonTimeInput(d,k2));
+      row.appendChild(a);row.appendChild(b2);return row;};
+    bd.appendChild(pair("Départ dépôt","departdepot","Arrivée chantier","arriveechantier"));
+    bd.appendChild(pair("Départ chantier","departchantier","Retour dépôt","retourdepot"));
+    const row3=el("div","row");
+    const rp=el("div","col");rp.appendChild(el("label","fl","Repas (durée)"));rp.appendChild(bonTimeInput(d,"repas"));
+    const to=el("div","col");to.appendChild(el("label","fl","Total (auto)"));
+    const ti=el("input");ti.type="text";ti.readOnly=true;ti.id="bdaytot_"+k;ti.style.fontWeight="800";ti.style.color="var(--bordeaux)";
+    ti.value=bt!=null?minHM(bt):"";to.appendChild(ti);
+    row3.appendChild(rp);row3.appendChild(to);bd.appendChild(row3);
+    const dsw=el("div");dsw.appendChild(el("label","fl","Description"));
+    const de=el("input");de.type="text";de.value=d.description||"";de.oninput=()=>{d.description=de.value;markDirty();};
+    dsw.appendChild(de);bd.appendChild(dsw);
+    card.appendChild(hd);card.appendChild(bd);root.appendChild(card);
+  });
+}
+function updateBonTotal(d,key){
+  // find the day key of d
+  DAYS.forEach(([k])=>{if(bonData().days[k]===d){const t=bonDayTotal(d);
+    const inp=document.getElementById("bdaytot_"+k);if(inp)inp.value=t!=null?minHM(t):"";
+    const tt=document.getElementById("btot_"+k);if(tt)tt.textContent=t!=null?("Total "+minHM(t)):"";}});
+}
+async function buildBonPDF(){
+  const {PDFDocument,StandardFonts,rgb}=PDFLib;
+  const doc=await PDFDocument.create();const page=doc.addPage([595.28,841.89]);
+  const F=await doc.embedFont(StandardFonts.Helvetica),B=await doc.embedFont(StandardFonts.HelveticaBold);
+  const BX=rgb(0.545,0.102,0.169),INK=rgb(0.10,0.10,0.12),GREY=rgb(0.45,0.45,0.47),LINE=rgb(0.80,0.78,0.76);
+  const W=595.28,H=841.89,M=24,right=W-M;
+  const T=(s,x,yy,sz,f,c)=>{if(s===undefined||s===null||s==="")return;page.drawText(String(s),{x,y:yy,size:sz,font:f||F,color:c||INK});};
+  const Tc=(s,cx,yy,sz,f,c)=>{if(s===undefined||s===null||s==="")return;const w=(f||F).widthOfTextAtSize(String(s),sz);T(s,cx-w/2,yy,sz,f,c);};
+  const Tr=(s,x,yy,sz,f,c)=>{if(s===undefined||s===null||s==="")return;const w=(f||F).widthOfTextAtSize(String(s),sz);T(s,x-w,yy,sz,f,c);};
+  const box=(x,yy,w,h,opt)=>{opt=opt||{};page.drawRectangle({x,y:yy,width:w,height:h,borderColor:opt.bc||LINE,borderWidth:opt.bw==null?0.8:opt.bw,color:opt.fill});};
+  const label=(s,x,yy)=>T(s,x,yy,7,F,GREY);
+  const vline=(x,y1,y2)=>page.drawLine({start:{x,y:y1},end:{x,y:y2},thickness:0.8,color:LINE});
+  const b=bonData(),mat=b.materiel,ch=b.chantier,monday=curWeek().monday;
+  let y=H-M;
+  T("DUFOUR TRANSPORTS ET MANUTENTIONS",M+2,y-14,15,B,INK);T("S.A.",M+2+B.widthOfTextAtSize("DUFOUR TRANSPORTS ET MANUTENTIONS",15)+4,y-14,9,B,INK);
+  ["Rue de la Terre à Briques, 18 — 7522 Marquain, Belgique","+32 (0)69 89 10 10  ·  info@groupe-dufour.com  ·  www.groupe-dufour.com","T.V.A. BE 0406.798.697 · FR 95392204913 · Licence Transport N°60208"].forEach((l,i)=>T(l,M+2,y-26-i*9,6.8,F,GREY));
+  Tr("N° DUF - "+(b.numduf||""),right,y-14,13,B,BX);
+  y-=54;page.drawRectangle({x:M,y:y-2,width:W-2*M,height:2.2,color:BX});y-=12;
+  page.drawRectangle({x:M,y:y-20,width:W-2*M,height:20,color:BX});Tc("BON DE TRAVAIL",W/2,y-14,12,B,rgb(1,1,1));y-=30;
+  const secLabel=(n,txt,yy)=>{page.drawRectangle({x:M,y:yy-13,width:110,height:17,color:BX});T(n,M+7,yy-10,9,B,rgb(1,1,1));T(txt,M+22,yy-10,10,B,rgb(1,1,1));};
+  secLabel("1","MATÉRIEL",y);y-=22;
+  const lx=M,lw=250,rx=M+265,rw=W-M-rx;
+  const fld=(lab,x,yy,w,val,sz)=>{label(lab,x,yy+2);box(x,yy-16,w,16);T(val||"",x+5,yy-12,sz||9.5,F);};
+  const accTop=y+2;fld("Machine",lx,y,lw,mat.machine);y-=22;fld("Plaque",lx,y,lw,mat.plaque);y-=22;fld("Opérateur",lx,y,lw,mat.operateur);
+  label("Accessoires · Matériel supplémentaire",rx,accTop+2);box(rx,y-16,rw,(accTop)-(y-16));
+  (mat.accessoires||"").split("\n").forEach((ln,i)=>T(ln,rx+5,accTop-12-i*11,8.5,F));
+  y-=26;
+  secLabel("2","CHANTIER",y);y-=22;
+  fld("Nom client",lx,y,300,ch.client);label("Réf.",M+320,y+2);box(M+320,y-16,W-M-(M+320),16);T(ch.ref||"",M+325,y-12,9,F);y-=22;
+  fld("Adresse chantier",lx,y,W-2*M,ch.adresse);y-=22;
+  fld("Contact",lx,y,300,ch.contact);label("Tél.",M+320,y+2);box(M+320,y-16,W-M-(M+320),16);T(ch.tel||"",M+325,y-12,9,F);y-=26;
+  secLabel("3","PRESTATIONS",y);y-=20;
+  const bx=M,bw=W-2*M;
+  const cols=[["Jour",52],["Date",64],["Départ dépôt",70],["Arrivée chantier",74],["Repas",52],["Départ chantier",70],["Retour dépôt",66],["Total",bw-(52+64+70+74+52+70+66)]];
+  let cx=[bx];cols.forEach(c=>cx.push(cx[cx.length-1]+c[1]));
+  const hy=y;box(bx,hy-22,bw,22,{fill:rgb(0.97,0.96,0.95)});
+  cols.forEach((c,i)=>Tc(c[0],(cx[i]+cx[i+1])/2,hy-11,7.3,B,INK));
+  ["","","Heure","Heure","Durée","Heure","Heure","Durée"].forEach((s,i)=>{if(s)Tc(s,(cx[i]+cx[i+1])/2,hy-19,6,F,GREY);});
+  for(let i=1;i<cols.length;i++)vline(cx[i],hy,hy-22);y=hy-22;
+  const abbr=["LUNDI","MARDI","MERCREDI","JEUDI","VENDREDI","SAMEDI","DIMANCHE"];const rowH=20,descH=20;
+  DAYS.forEach(([k],idx)=>{
+    const d=bonDay(k);box(bx,y-rowH,bw,rowH);for(let i=1;i<cols.length;i++)vline(cx[i],y,y-rowH);
+    T(abbr[idx],cx[0]+4,y-13,7.3,B,BX);
+    const dt=dayDate(monday,idx);Tc(two(dt.getDate())+"/"+two(dt.getMonth()+1)+"/"+String(dt.getFullYear()).slice(2),(cx[1]+cx[2])/2,y-13,7.5,F,GREY);
+    Tc(d.departdepot||"",(cx[2]+cx[3])/2,y-13,8.5,F);Tc(d.arriveechantier||"",(cx[3]+cx[4])/2,y-13,8.5,F);Tc(d.repas||"",(cx[4]+cx[5])/2,y-13,8.5,F);
+    Tc(d.departchantier||"",(cx[5]+cx[6])/2,y-13,8.5,F);Tc(d.retourdepot||"",(cx[6]+cx[7])/2,y-13,8.5,F);
+    const bt=bonDayTotal(d);Tc(bt!=null?minHM(bt):"",(cx[7]+cx[8])/2,y-13,8.5,B,BX);
+    y-=rowH;box(bx,y-descH,bw,descH);label("Description",bx+4,y-8);T(d.description||"",bx+66,y-13,8.5,F);y-=descH+3;
+  });
+  y-=6;const fw=(bw-12)/2,fH=70;
+  box(bx,y-fH,fw,fH);T("Signature du client — AVANT exécution",bx+5,y-11,7,B,GREY);T("Nom / prénom :",bx+5,y-24,7.5,F,GREY);
+  box(bx+fw+12,y-fH,fw,fH);T("Signature du client — APRÈS exécution",bx+fw+17,y-11,7,B,GREY);T("Nom / prénom :",bx+fw+17,y-24,7.5,F,GREY);
+  async function drawSig(sig,x){if(!sig)return;try{const im=await doc.embedPng(b64ToBytes(sig.split(",")[1]));
+    const sw=fw-16,sh=fH-34;const sc=Math.min(sw/im.width,sh/im.height);page.drawImage(im,{x:x+6,y:y-fH+6,width:im.width*sc,height:im.height*sc});}catch(e){}}
+  await drawSig(b.sigAvant,bx);await drawSig(b.sigApres,bx+fw+12);
+  const bytes=await doc.save();const mon=new Date(monday+"T12:00:00");
+  return {bytes:bytes,fname:"BonDeTravail_S"+two(isoWeekNum(mon))+"_"+mon.getFullYear()+".pdf"};
 }
 
 // ---------- PDF generation ----------
@@ -969,23 +1468,42 @@ function bind(){
     store.weeks[key]=newWeekObj(key);store.current=key;saveStore();refreshWeekUI();renderDays();toast("Nouvelle semaine créée");};
   $("#btn_delweek").onclick=()=>{
     if(Object.keys(store.weeks).length<=1){toast("Impossible de supprimer la dernière semaine");return;}
-    if(confirm("Supprimer définitivement cette semaine ?")){delete store.weeks[store.current];store.current=null;
+    if(confirm("Supprimer définitivement cette semaine ?")){
+      const wk=store.weeks[store.current];
+      if(wk&&wk.frais&&wk.frais.justifs)wk.frais.justifs.forEach(j=>idbDel(j.id));
+      delete store.weeks[store.current];store.current=null;
       ensureCurrent();saveStore();refreshWeekUI();renderDays();}};
   $("#btn_pdf").onclick=async()=>{
     const btn=$("#btn_pdf");btn.disabled=true;const old=btn.textContent;btn.textContent="Génération…";
-    try{const {bytes,fname}=await buildPDF();downloadPDF(bytes,fname);toast("PDF enregistré : "+fname);}
+    try{const gen=currentTab==="frais"?buildFraisPDF:currentTab==="chantiers"?buildBonPDF:buildPDF;
+      const {bytes,fname}=await gen();downloadPDF(bytes,fname);toast("Enregistré : "+fname);}
     catch(e){console.error(e);alert("Erreur lors de la génération : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
   $("#btn_share").onclick=async()=>{
     const btn=$("#btn_share");btn.disabled=true;const old=btn.textContent;btn.textContent="…";
     try{
-      const {bytes,fname}=await buildPDF();
+      const gen=currentTab==="frais"?buildFraisPDF:currentTab==="chantiers"?buildBonPDF:buildPDF;
+      const {bytes,fname}=await gen();
       if(canShareFiles()){
         try{await sharePDF(bytes,fname);toast("Partagé");}
-        catch(e){if(e && e.name==="AbortError"){/* annulé */}else{downloadPDF(bytes,fname);toast("Partage indisponible → PDF enregistré");}}
-      }else{downloadPDF(bytes,fname);toast("Partage non supporté → PDF enregistré");}
+        catch(e){if(e && e.name==="AbortError"){/* annulé */}else{downloadPDF(bytes,fname);toast("Partage indisponible → enregistré");}}
+      }else{downloadPDF(bytes,fname);toast("Partage non supporté → enregistré");}
     }catch(e){console.error(e);alert("Erreur : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
+  // main tabs
+  document.querySelectorAll("#maintabs .mtab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  // frais profile
+  [["fp_nom","nom"],["fp_prenom","prenom"],["fp_societe","societe"],["fp_vehicule","vehicule"],["fp_iban","iban"],["fp_bic","bic"]].forEach(([id,key])=>{
+    $("#"+id).oninput=e=>{store.fraisProfile[key]=e.target.value;saveStore();};});
+  $("#frais_week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
+  $("#justif_add").onclick=()=>$("#justif_input").click();
+  $("#justif_input").onchange=e=>{const files=e.target.files;if(files&&files.length)addJustifs(files);e.target.value="";};
+  // bon (chantiers)
+  $("#bon_week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
+  $("#bon_numduf").oninput=e=>{bonData().numduf=e.target.value;saveStore();};
+  [["bm_machine","materiel","machine"],["bm_plaque","materiel","plaque"],["bm_operateur","materiel","operateur"],["bm_accessoires","materiel","accessoires"],
+   ["bc_client","chantier","client"],["bc_ref","chantier","ref"],["bc_adresse","chantier","adresse"],["bc_contact","chantier","contact"],["bc_tel","chantier","tel"]].forEach(([id,grp,key])=>{
+    $("#"+id).oninput=e=>{bonData()[grp][key]=e.target.value;saveStore();};});
   // recap
   $("#tab_week").onclick=()=>{recapMode="week";$("#tab_week").classList.add("on");$("#tab_month").classList.remove("on");
     $("#recap_week").style.display="";$("#recap_month").style.display="none";refreshRecap();};
@@ -999,7 +1517,7 @@ function bind(){
 
 // ---------- init ----------
 function init(){
-  loadIdentityUI();renderVehicleList();refreshWeekUI();renderDays();bind();
+  loadIdentityUI();renderVehicleList();loadFraisProfileUI();initSignaturePads();refreshWeekUI();renderDays();bind();
   if(!(store.identity.nom||store.identity.prenom||store.identity.adr1)){
     const cp=document.getElementById("card-profile");if(cp)cp.classList.add("open");}
   document.getElementById("recap_month_input").value=defaultMonth();
