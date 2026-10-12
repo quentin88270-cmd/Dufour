@@ -112,9 +112,10 @@ select.dayveh{max-width:100%;font-weight:600;color:var(--bordeaux);border-color:
 .fill-flag{width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block;margin-left:6px}
 .fill-flag.on{background:var(--ok)}
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:#fff;border-top:1px solid var(--line);
-  padding:10px 12px calc(10px + var(--safe-b));display:flex;gap:10px;align-items:center;
+  padding:10px 10px calc(10px + var(--safe-b));display:flex;gap:8px;align-items:center;
   box-shadow:0 -2px 10px rgba(0,0,0,.06)}
 .bar .status{flex:1;font-size:12px;color:var(--muted)}
+.bar .btn{flex:1;padding:12px 6px}
 .btn{padding:12px 16px;border-radius:12px;border:none;font-size:15px;font-weight:800;cursor:pointer}
 .btn.primary{background:var(--bordeaux);color:#fff}
 .btn.ghost{background:#f1ede8;color:var(--bordeaux)}
@@ -249,10 +250,33 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
   <div id="days"></div>
 
+  <div class="card" id="card-send">
+    <div class="hd" data-toggle>📤 Envoi (e-mail &amp; archive) <span class="chev">▶</span></div>
+    <div class="bd">
+      <p class="hint" style="margin-top:0">Réglages communs aux 3 onglets. L'envoi expédie le PDF par e-mail et en garde une copie dans Drive (via le script Google).</p>
+      <label class="fl">E-mail destinataire</label><input type="email" id="send_email" placeholder="pointages@dufour-groupe.com">
+      <label class="fl">URL du script d'envoi (Google Apps Script)</label><input type="text" id="send_url" placeholder="https://script.google.com/macros/s/…/exec">
+      <p class="hint" id="send_help" style="margin-top:6px">Sans URL, « Envoyer » ouvre le partage du téléphone (tu envoies le mail toi-même). Avec l'URL, l'envoi + l'archivage Drive sont automatiques.</p>
+    </div>
+  </div>
+
+  <div class="card" id="card-backup">
+    <div class="hd" data-toggle>💾 Sauvegarde (profil + semaines) <span class="chev">▶</span></div>
+    <div class="bd">
+      <p class="hint" style="margin-top:0">Exporte un petit fichier contenant <b>tout</b> (profil, véhicules, signature, réglages et toutes les semaines des 3 onglets) — pour le garder ou le réinstaller sur un autre téléphone.</p>
+      <div class="row">
+        <div class="col"><button class="btn ghost" id="btn_export" style="width:100%">⬇ Exporter mes données</button></div>
+        <div class="col"><button class="btn ghost" id="btn_import" style="width:100%">⬆ Importer</button></div>
+      </div>
+      <input type="file" id="import_input" accept="application/json,.json" style="display:none">
+      <p class="hint" style="margin-top:8px">Note : les <b>photos de justificatifs</b> restent sur le téléphone d'origine (non incluses dans la sauvegarde).</p>
+    </div>
+  </div>
+
   <div class="card" id="card-about">
     <div class="hd" data-toggle>À propos &amp; mise à jour <span class="chev">▶</span></div>
     <div class="bd">
-      <p class="hint" style="margin-top:2px">Version <b id="app_ver">—</b>. Si une nouveauté n'apparaît pas (ex. la roulette des heures), force la mise à jour — ça vide le cache et recharge la dernière version. Nécessite Internet si l'appli est hébergée.</p>
+      <p class="hint" style="margin-top:2px">Version <b id="app_ver">—</b>. Si une nouveauté n'apparaît pas, force la mise à jour — ça vide le cache et recharge la dernière version. Nécessite Internet si l'appli est hébergée.</p>
       <button class="btn ghost" id="btn_update" style="width:100%">🔄 Forcer la mise à jour</button>
     </div>
   </div>
@@ -286,7 +310,12 @@ table.recap td.big{font-weight:800;color:var(--ink)}
     <div class="bd">
       <label class="fl">Semaine</label>
       <select id="frais_week_select" class="week-select"></select>
+      <div class="daybtns" style="margin-top:10px">
+        <button id="frais_newweek">＋ Nouvelle semaine</button>
+        <button id="frais_delweek">🗑 Supprimer cette semaine</button>
+      </div>
       <p class="hint" id="frais_week_range"></p>
+      <label class="fl">N° de la note de frais (DUF)</label><input type="text" id="frais_numduf" placeholder="ex. 41702" inputmode="numeric">
     </div>
   </div>
 
@@ -314,6 +343,10 @@ table.recap td.big{font-weight:800;color:var(--ink)}
     <div class="bd">
       <label class="fl">Semaine</label>
       <select id="bon_week_select" class="week-select"></select>
+      <div class="daybtns" style="margin-top:10px">
+        <button id="bon_newweek">＋ Nouvelle semaine</button>
+        <button id="bon_delweek">🗑 Supprimer cette semaine</button>
+      </div>
       <p class="hint" id="bon_week_range"></p>
     </div>
   </div>
@@ -359,9 +392,9 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 </div>
 
 <div class="bar">
-  <div class="status" id="status">Chargement…</div>
-  <button class="btn ghost" id="btn_share" disabled>Partager</button>
-  <button class="btn primary" id="btn_pdf" disabled>Enregistrer le PDF</button>
+  <button class="btn ghost" id="btn_view" disabled>👁 Voir</button>
+  <button class="btn ghost" id="btn_pdf" disabled>⬇ Enreg.</button>
+  <button class="btn primary" id="btn_send" disabled>📤 Envoyer</button>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -398,7 +431,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="2.6";
+const APP_VERSION="3.1";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
@@ -417,6 +450,7 @@ if(store.vehicle && !store.vehicles){
 }
 if(!store.vehicles) store.vehicles=[];
 if(!store.fraisProfile) store.fraisProfile={nom:"",prenom:"",societe:"",vehicule:"",iban:"",bic:""};
+if(!store.send) store.send={email:"pointages@dufour-groupe.com",scriptUrl:""};
 
 function isoMonday(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setDate(x.getDate()-day);
   x.setHours(12,0,0,0);return x;}
@@ -1010,7 +1044,7 @@ function switchTab(name){
   document.getElementById("view-chantiers").style.display=(name==="chantiers")?"":"none";
   document.querySelectorAll("#maintabs .mtab").forEach(b=>b.classList.toggle("on",b.dataset.tab===name));
   const pdf=document.getElementById("btn_pdf");
-  if(pdf)pdf.textContent=(name==="frais")?"Enregistrer la note":(name==="chantiers")?"Enregistrer le bon":"Enregistrer le PDF";
+  if(pdf)pdf.textContent="⬇ Enreg.";
   if(name==="frais"){renderFrais();
     if(!(store.fraisProfile.nom||store.fraisProfile.prenom||store.fraisProfile.iban)){
       const c=document.getElementById("card-frais-profile");if(c)c.classList.add("open");}}
@@ -1056,6 +1090,7 @@ function initSignaturePads(){
 }
 function reloadSigPads(){["sig_pad","bon_sig_avant","bon_sig_apres"].forEach(id=>{const c=document.getElementById(id);if(c&&c._reload)c._reload();});}
 function renderFrais(){
+  const fn=document.getElementById("frais_numduf");if(fn)fn.value=(curWeek().frais&&curWeek().frais.numduf)||"";
   const root=document.getElementById("frais-days");if(!root)return;root.innerHTML="";
   DAYS.forEach(([k,label],idx)=>{
     const d=fraisDay(k);const dt=dayDate(curWeek().monday,idx);
@@ -1168,7 +1203,7 @@ async function buildFraisPDF(){
   const vline=(x,y1,y2)=>page.drawLine({start:{x,y:y1},end:{x,y:y2},thickness:0.8,color:LINE});
   const p=store.fraisProfile;const monday=curWeek().monday;
   let y=H-M;
-  T("NOTE DE FRAIS",M+2,y-26,26,B,BX);Tr("DUFNF°41702",right,y-24,14,B,BX);
+  T("NOTE DE FRAIS",M+2,y-26,26,B,BX);Tr("DUFNF° "+((curWeek().frais&&curWeek().frais.numduf)||""),right,y-24,14,B,BX);
   y-=42;page.drawRectangle({x:M,y:y-3,width:W-2*M,height:2.4,color:BX});y-=18;
   const secLabel=(n,txt,yy)=>{page.drawRectangle({x:M,y:yy-13,width:118,height:17,color:BX});T(n,M+7,yy-10,9,B,rgb(1,1,1));T(txt,M+22,yy-10,10.5,B,rgb(1,1,1));};
   secLabel("1","RESSOURCES",y);
@@ -1441,10 +1476,44 @@ function canShareFiles(){
   catch(e){return false;}
 }
 async function sharePDF(bytes,fname){
-  // Uint8Array.slice() → own ArrayBuffer, safe for File on all browsers
   const file=new File([bytes.slice()],fname,{type:"application/pdf"});
   await navigator.share({files:[file],title:fname,
     text:"Feuille de pointage "+(store.identity.nom||"")+" "+(store.identity.prenom||"")});
+}
+// ---- Voir / Envoyer ----
+function currentGen(){return currentTab==="frais"?buildFraisPDF():currentTab==="chantiers"?buildBonPDF():buildPDF();}
+function docLabel(){return currentTab==="frais"?"Note de frais":currentTab==="chantiers"?"Bon de travail":"Feuille de pointage";}
+function viewPDF(bytes){
+  const url=URL.createObjectURL(new Blob([bytes.slice()],{type:"application/pdf"}));
+  const w=window.open(url,"_blank");
+  if(!w){const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener";document.body.appendChild(a);a.click();a.remove();}
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+function bytesToB64(bytes){let bin="";const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));return btoa(bin);}
+function loadSendUI(){$("#send_email").value=store.send.email||"";$("#send_url").value=store.send.scriptUrl||"";}
+function markSent(){const wk=curWeek();if(!wk.sent)wk.sent={};wk.sent[currentTab]=new Date().toISOString();saveStore();}
+function operatorName(){
+  const id=((store.identity.nom||"")+" "+(store.identity.prenom||"")).trim();if(id)return id;
+  const fp=((store.fraisProfile.nom||"")+" "+(store.fraisProfile.prenom||"")).trim();if(fp)return fp;
+  return ((bonData().materiel&&bonData().materiel.operateur)||"").trim();
+}
+async function sendCurrent(){
+  const {bytes,fname}=await currentGen();
+  const url=(store.send.scriptUrl||"").trim();
+  if(url){
+    const payload={type:currentTab,label:docLabel(),filename:fname,email:(store.send.email||"").trim(),
+      operateur:operatorName(),
+      semaine:(curWeek().monday||""),pdf:bytesToB64(bytes)};
+    const res=await fetch(url,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(payload),redirect:"follow"});
+    let ok=res.ok;try{const j=await res.json();ok=ok&&j&&j.ok!==false;}catch(e){}
+    if(ok){markSent();toast("Envoyé à "+(store.send.email||"destinataire")+" ✓ (copie Drive)");}
+    else{throw new Error("le script a renvoyé une erreur");}
+  }else{
+    // pas d'URL → partage natif pour envoi manuel
+    if(canShareFiles()){try{await sharePDF(bytes,fname);toast("Partagé — choisis Mail pour l'envoyer");}
+      catch(e){if(!(e&&e.name==="AbortError")){downloadPDF(bytes,fname);toast("Enregistré — configure l'URL d'envoi dans « Envoi »");}}}
+    else{downloadPDF(bytes,fname);toast("Enregistré. Configure l'URL d'envoi (onglet Heures → Envoi) pour l'envoi automatique.");}
+  }
 }
 
 // ---------- events ----------
@@ -1462,40 +1531,42 @@ function bind(){
       else{const wk=curWeek();wk.monday=iso;store.weeks[iso]=wk;if(store.current!==iso){delete store.weeks[store.current];}store.current=iso;}
       saveStore();refreshWeekUI();renderDays();
     }};
-  $("#btn_newweek").onclick=()=>{
+  function doNewWeek(){
     const base=isoMonday(new Date());const iso=fmtISO(base);
     let key=iso,n=0;while(store.weeks[key]){n++;const d=new Date(base);d.setDate(d.getDate()+7*n);key=fmtISO(d);}
-    store.weeks[key]=newWeekObj(key);store.current=key;saveStore();refreshWeekUI();renderDays();toast("Nouvelle semaine créée");};
-  $("#btn_delweek").onclick=()=>{
+    store.weeks[key]=newWeekObj(key);store.current=key;saveStore();refreshWeekUI();renderDays();toast("Nouvelle semaine créée");}
+  function doDelWeek(){
     if(Object.keys(store.weeks).length<=1){toast("Impossible de supprimer la dernière semaine");return;}
     if(confirm("Supprimer définitivement cette semaine ?")){
       const wk=store.weeks[store.current];
       if(wk&&wk.frais&&wk.frais.justifs)wk.frais.justifs.forEach(j=>idbDel(j.id));
       delete store.weeks[store.current];store.current=null;
-      ensureCurrent();saveStore();refreshWeekUI();renderDays();}};
+      ensureCurrent();saveStore();refreshWeekUI();renderDays();}}
+  ["btn_newweek","frais_newweek","bon_newweek"].forEach(id=>{const b=document.getElementById(id);if(b)b.onclick=doNewWeek;});
+  ["btn_delweek","frais_delweek","bon_delweek"].forEach(id=>{const b=document.getElementById(id);if(b)b.onclick=doDelWeek;});
   $("#btn_pdf").onclick=async()=>{
-    const btn=$("#btn_pdf");btn.disabled=true;const old=btn.textContent;btn.textContent="Génération…";
-    try{const gen=currentTab==="frais"?buildFraisPDF:currentTab==="chantiers"?buildBonPDF:buildPDF;
-      const {bytes,fname}=await gen();downloadPDF(bytes,fname);toast("Enregistré : "+fname);}
+    const btn=$("#btn_pdf");btn.disabled=true;const old=btn.textContent;btn.textContent="…";
+    try{const {bytes,fname}=await currentGen();downloadPDF(bytes,fname);toast("Enregistré : "+fname);}
     catch(e){console.error(e);alert("Erreur lors de la génération : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
-  $("#btn_share").onclick=async()=>{
-    const btn=$("#btn_share");btn.disabled=true;const old=btn.textContent;btn.textContent="…";
-    try{
-      const gen=currentTab==="frais"?buildFraisPDF:currentTab==="chantiers"?buildBonPDF:buildPDF;
-      const {bytes,fname}=await gen();
-      if(canShareFiles()){
-        try{await sharePDF(bytes,fname);toast("Partagé");}
-        catch(e){if(e && e.name==="AbortError"){/* annulé */}else{downloadPDF(bytes,fname);toast("Partage indisponible → enregistré");}}
-      }else{downloadPDF(bytes,fname);toast("Partage non supporté → enregistré");}
-    }catch(e){console.error(e);alert("Erreur : "+e.message);}
+  $("#btn_view").onclick=async()=>{
+    const btn=$("#btn_view");btn.disabled=true;const old=btn.textContent;btn.textContent="…";
+    try{const {bytes,fname}=await currentGen();viewPDF(bytes,fname);}
+    catch(e){console.error(e);alert("Erreur : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
+  $("#btn_send").onclick=async()=>{
+    const btn=$("#btn_send");btn.disabled=true;const old=btn.textContent;btn.textContent="Envoi…";
+    try{await sendCurrent();}catch(e){console.error(e);alert("Erreur : "+e.message);}
+    btn.textContent=old;btn.disabled=false;};
+  $("#send_email").oninput=e=>{store.send.email=e.target.value.trim();saveStore();};
+  $("#send_url").oninput=e=>{store.send.scriptUrl=e.target.value.trim();saveStore();};
   // main tabs
   document.querySelectorAll("#maintabs .mtab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   // frais profile
   [["fp_nom","nom"],["fp_prenom","prenom"],["fp_societe","societe"],["fp_vehicule","vehicule"],["fp_iban","iban"],["fp_bic","bic"]].forEach(([id,key])=>{
     $("#"+id).oninput=e=>{store.fraisProfile[key]=e.target.value;saveStore();};});
   $("#frais_week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
+  $("#frais_numduf").oninput=e=>{fraisWeek().numduf=e.target.value;saveStore();};
   $("#justif_add").onclick=()=>$("#justif_input").click();
   $("#justif_input").onchange=e=>{const files=e.target.files;if(files&&files.length)addJustifs(files);e.target.value="";};
   // bon (chantiers)
@@ -1517,16 +1588,36 @@ function bind(){
 
 // ---------- init ----------
 function init(){
-  loadIdentityUI();renderVehicleList();loadFraisProfileUI();initSignaturePads();refreshWeekUI();renderDays();bind();
+  loadIdentityUI();renderVehicleList();loadFraisProfileUI();initSignaturePads();loadSendUI();refreshWeekUI();renderDays();bind();
   if(!(store.identity.nom||store.identity.prenom||store.identity.adr1)){
     const cp=document.getElementById("card-profile");if(cp)cp.classList.add("open");}
   document.getElementById("recap_month_input").value=defaultMonth();
-  $("#status").textContent="Prêt · sauvegarde auto · v"+APP_VERSION;
   const av=document.getElementById("app_ver");if(av)av.textContent=APP_VERSION;
   const bu=document.getElementById("btn_update");if(bu)bu.onclick=forceUpdate;
-  $("#btn_pdf").disabled=false;
-  if(canShareFiles()){$("#btn_share").disabled=false;}
-  else{$("#btn_share").style.display="none";}
+  const be=document.getElementById("btn_export");if(be)be.onclick=exportData;
+  const bi=document.getElementById("btn_import");if(bi)bi.onclick=()=>$("#import_input").click();
+  const ii=document.getElementById("import_input");if(ii)ii.onchange=e=>{if(e.target.files&&e.target.files[0])importData(e.target.files[0]);e.target.value="";};
+  $("#btn_pdf").disabled=false;$("#btn_view").disabled=false;$("#btn_send").disabled=false;
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(store)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");
+  const d=new Date();const stamp=d.getFullYear()+"-"+two(d.getMonth()+1)+"-"+two(d.getDate());
+  a.href=url;a.download="sauvegarde-pointage-"+stamp+".json";document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
+  toast("Sauvegarde exportée");
+}
+function importData(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;try{data=JSON.parse(r.result);}catch(e){alert("Fichier illisible (ce n'est pas une sauvegarde valide).");return;}
+    if(!data||typeof data!=="object"||!data.weeks){alert("Ce fichier ne ressemble pas à une sauvegarde de l'appli.");return;}
+    if(!confirm("Remplacer TOUTES les données de cet appareil par cette sauvegarde ?\n(profil, véhicules, signatures et toutes les semaines)"))return;
+    try{localStorage.setItem(LS_KEY,JSON.stringify(data));}catch(e){alert("Stockage insuffisant pour importer.");return;}
+    location.reload();
+  };
+  r.onerror=()=>alert("Lecture du fichier impossible.");
+  r.readAsText(file);
 }
 async function forceUpdate(){
   if(!confirm("Vider le cache et recharger la dernière version ?\n(si l'appli est hébergée, une connexion Internet est nécessaire)"))return;
@@ -1542,7 +1633,7 @@ async function forceUpdate(){
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});
 }
-if(typeof PDFLib==="undefined"){$("#status").textContent="Erreur : moteur PDF non chargé";}
+if(typeof PDFLib==="undefined"){alert("Erreur : moteur PDF non chargé");}
 else{init();}
 })();
 </script>

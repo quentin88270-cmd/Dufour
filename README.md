@@ -1,74 +1,26 @@
-# Feuille de pointage — DUFOUR CELTIC LEVAGE
+# Pointage DUFOUR — appli (heures · frais · chantiers)
 
-Application web **hors-ligne** (PWA) pour saisir et générer la feuille de pointage
-hebdomadaire, puis l'enregistrer / la partager (Drive, mail, impression).
-Tout est autonome : aucune dépendance externe, rien n'est envoyé sur Internet
-(le PDF est fabriqué sur l'appareil).
+Application web hors-ligne. 3 onglets : Mes heures, Mes frais, Mes chantiers.
+Chaque document se **voit**, s'**enregistre** en PDF et s'**envoie** par e-mail
+(avec copie archivée dans Drive).
 
-## Contenu
+## Fichiers
+- `index.html` — l'appli complète (tout est embarqué, 100 % hors-ligne).
+- `sw.js` — service worker (fonctionne hors-ligne une fois ouvert).
+- `AppsScript_Envoi.gs` — script Google à déployer pour l'envoi e-mail + archive Drive.
 
-```
-index.html               ← l'application (tout est embarqué : pdf-lib, gabarit PDF, logique)
-manifest.webmanifest     ← manifest PWA (nom, icônes, couleurs)
-sw.js                    ← service worker (fonctionne hors-ligne une fois ouvert)
-icons/                   ← icônes générées depuis le logo
-  icon-192.png / icon-512.png
-  icon-192-maskable.png / icon-512-maskable.png
-  apple-touch-icon.png
-  favicon.ico
-README.md
-```
+## Mettre en ligne (GitHub Pages)
+Pousse `index.html` et `sw.js` à la racine du dépôt → Settings → Pages →
+branche `main`, dossier `/root`. L'appli est sur `https://<compte>.github.io/<repo>/`.
+(Le fichier `index.html` fonctionne aussi seul, sans hébergement.)
 
-## Mettre en ligne sur GitHub Pages
+## Activer l'envoi automatique (e-mail + archive Drive)
+1. Ouvre `AppsScript_Envoi.gs` et suis les instructions en tête du fichier
+   (coller dans script.google.com → déployer en Application Web → copier l'URL `…/exec`).
+2. Dans l'appli : onglet **Heures → 📤 Envoi** → colle l'URL du script et vérifie l'e-mail
+   destinataire (par défaut `pointages@dufour-groupe.com`).
+3. Le bouton **📤 Envoyer** expédie alors le PDF de l'onglet courant au destinataire
+   et en garde une copie dans Drive (dossier « Pointages DUFOUR »).
 
-1. Crée un dépôt (ex. `pointage-dcl`) et pousse **tout le contenu de ce dossier à la racine**
-   (le fichier `index.html` doit être à la racine du dépôt).
-   ```bash
-   git init
-   git add .
-   git commit -m "Feuille de pointage DCL — PWA"
-   git branch -M main
-   git remote add origin https://github.com/<toncompte>/pointage-dcl.git
-   git push -u origin main
-   ```
-2. Dépôt → **Settings → Pages** → *Build and deployment* → **Source : Deploy from a branch**,
-   branche `main`, dossier `/ (root)` → **Save**.
-3. Au bout d'1–2 min, l'app est en ligne sur
-   `https://<toncompte>.github.io/pointage-dcl/`.
-
-Comme le site est servi en **HTTPS**, le bouton **Partager** et l'installation
-« Ajouter à l'écran d'accueil » fonctionnent partout.
-
-## Installer sur le téléphone
-
-- **Android / Chrome** : ouvre l'URL → menu ⋮ → *Ajouter à l'écran d'accueil*
-  (ou la bannière d'installation).
-- **iPhone / Safari** : ouvre l'URL → bouton Partager → *Sur l'écran d'accueil*.
-
-L'app s'ouvre alors en plein écran, hors-ligne, comme une vraie appli.
-
-## Envoyer le PDF dans Drive
-
-Le bouton **📁 Drive** ouvre directement le dossier Drive de destination.
-Le bouton **Partager** ouvre la feuille de partage du téléphone : choisis
-*Enregistrer dans Drive*, puis le bon dossier.
-
-> Upload **automatique** dans un dossier Drive précis (sans passer par le partage) :
-> possible mais nécessite une connexion Google (OAuth) + un identifiant client
-> Google Cloud autorisé pour ce domaine. Sur demande.
-
-## Modifier / développer
-
-- Éditeur : VS Code (extension *Live Server* pour tester en `localhost`, utile car
-  le partage de fichiers exige un contexte sécurisé).
-- Test rapide hors-ligne : `python -m http.server` dans le dossier puis `http://localhost:8000`.
-- L'app garde la saisie en cours dans le navigateur (localStorage, clé `fdp_dcl_v1`),
-  semaine par semaine, avec sauvegarde automatique à chaque frappe.
-
-## Notes techniques
-
-- Le remplissage ne passe **pas** par le formulaire AcroForm du PDF d'origine
-  (les apparences iOS ne s'affichaient pas dans tous les lecteurs). L'app **dessine**
-  le texte et les croix aux coordonnées exactes des 837 champs, sur un gabarit aplati.
-  Rendu identique partout (Chrome/PDFium, poppler, Aperçu, Acrobat) et à l'impression.
-- Police Helvetica standard (accents FR gérés), pas de police externe à charger.
+Sans URL de script, **Envoyer** ouvre simplement le partage du téléphone (tu envoies
+le mail toi-même). Dans tous les cas, **Voir** affiche le PDF et **Enreg.** le télécharge.
