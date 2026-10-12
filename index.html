@@ -250,15 +250,6 @@ table.recap td.big{font-weight:800;color:var(--ink)}
 
   <div id="days"></div>
 
-  <div class="card" id="card-send">
-    <div class="hd" data-toggle>📤 Envoi (e-mail &amp; archive) <span class="chev">▶</span></div>
-    <div class="bd">
-      <p class="hint" style="margin-top:0">Réglages communs aux 3 onglets. L'envoi expédie le PDF par e-mail et en garde une copie dans Drive (via le script Google).</p>
-      <label class="fl">E-mail destinataire</label><input type="email" id="send_email" placeholder="pointages@dufour-groupe.com">
-      <label class="fl">URL du script d'envoi (Google Apps Script)</label><input type="text" id="send_url" placeholder="https://script.google.com/macros/s/…/exec">
-      <p class="hint" id="send_help" style="margin-top:6px">Sans URL, « Envoyer » ouvre le partage du téléphone (tu envoies le mail toi-même). Avec l'URL, l'envoi + l'archivage Drive sont automatiques.</p>
-    </div>
-  </div>
 
   <div class="card" id="card-backup">
     <div class="hd" data-toggle>💾 Sauvegarde (profil + semaines) <span class="chev">▶</span></div>
@@ -375,6 +366,9 @@ table.recap td.big{font-weight:800;color:var(--ink)}
     </div>
   </div>
 
+  <div class="daybtns" style="margin:0 0 4px">
+    <button id="bon_import_week">⟲ Reprendre toute la semaine depuis Mes heures</button>
+  </div>
   <div id="bon-days"></div>
 
   <div class="card open" id="card-bon-sign">
@@ -431,7 +425,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="3.1";
+const APP_VERSION="3.4";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
@@ -1296,6 +1290,25 @@ function bonTimeInput(d,key){
   i.onchange=i.oninput=()=>{d[key]=i.value;markDirty();updateBonTotal(d,key);};
   return i;
 }
+function hmFromHeures(hd,base){const hh=hd[base+"_hh"],mm=hd[base+"_mm"];
+  if((hh===undefined||hh==="")&&(mm===undefined||mm===""))return "";
+  return two(parseInt(hh||"0",10)||0)+":"+two(parseInt(mm||"0",10)||0);}
+function bonImportDay(k){
+  const hd=(curWeek().days&&curWeek().days[k])||{};const d=bonDay(k);
+  const dd=hmFromHeures(hd,"b_dep_h");                               // départ dépôt (seulement si dépôt)
+  const ac=hmFromHeures(hd,"b_arr_h")||hmFromHeures(hd,"c_deb");     // arrivée chantier = début activité
+  const dc=hmFromHeures(hd,"d_dep_h")||hmFromHeures(hd,"c_fin");     // départ chantier = fin activité
+  const rd=hmFromHeures(hd,"d_arr_h");                               // retour dépôt (seulement si dépôt)
+  d.departdepot=dd;d.arriveechantier=ac;d.departchantier=dc;d.retourdepot=rd;
+  markDirty();renderBon();toast("Horaires repris depuis Mes heures");
+}
+function bonImportWeek(){DAYS.forEach(([k])=>{
+  const hd=(curWeek().days&&curWeek().days[k])||{};const d=bonDay(k);
+  d.departdepot=hmFromHeures(hd,"b_dep_h");
+  d.arriveechantier=hmFromHeures(hd,"b_arr_h")||hmFromHeures(hd,"c_deb");
+  d.departchantier=hmFromHeures(hd,"d_dep_h")||hmFromHeures(hd,"c_fin");
+  d.retourdepot=hmFromHeures(hd,"d_arr_h");});
+  markDirty();renderBon();toast("Semaine reprise depuis Mes heures");}
 function renderBon(){
   const root=document.getElementById("bon-days");if(!root)return;root.innerHTML="";
   DAYS.forEach(([k,label],idx)=>{
@@ -1307,6 +1320,9 @@ function renderBon(){
     right.appendChild(tt);const chev=el("span","chev","▶");chev.style.marginLeft="8px";right.appendChild(chev);hd.appendChild(right);
     hd.onclick=()=>{card.classList.toggle("open");openDays["b_"+k]=card.classList.contains("open");};
     const bd=el("div","bd");
+    const imp=el("div","daybtns");
+    const ib=el("button",null,"⟲ Reprendre mes heures");ib.onclick=()=>bonImportDay(k);imp.appendChild(ib);
+    bd.appendChild(imp);
     const pair=(l1,k1,l2,k2)=>{const row=el("div","row");
       const a=el("div","col");a.appendChild(el("label","fl",l1));a.appendChild(bonTimeInput(d,k1));
       const b2=el("div","col");b2.appendChild(el("label","fl",l2));b2.appendChild(bonTimeInput(d,k2));
@@ -1490,7 +1506,6 @@ function viewPDF(bytes){
   setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 function bytesToB64(bytes){let bin="";const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));return btoa(bin);}
-function loadSendUI(){$("#send_email").value=store.send.email||"";$("#send_url").value=store.send.scriptUrl||"";}
 function markSent(){const wk=curWeek();if(!wk.sent)wk.sent={};wk.sent[currentTab]=new Date().toISOString();saveStore();}
 function operatorName(){
   const id=((store.identity.nom||"")+" "+(store.identity.prenom||"")).trim();if(id)return id;
@@ -1558,8 +1573,6 @@ function bind(){
     const btn=$("#btn_send");btn.disabled=true;const old=btn.textContent;btn.textContent="Envoi…";
     try{await sendCurrent();}catch(e){console.error(e);alert("Erreur : "+e.message);}
     btn.textContent=old;btn.disabled=false;};
-  $("#send_email").oninput=e=>{store.send.email=e.target.value.trim();saveStore();};
-  $("#send_url").oninput=e=>{store.send.scriptUrl=e.target.value.trim();saveStore();};
   // main tabs
   document.querySelectorAll("#maintabs .mtab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   // frais profile
@@ -1572,6 +1585,7 @@ function bind(){
   // bon (chantiers)
   $("#bon_week_select").onchange=e=>{store.current=e.target.value;saveStore();refreshWeekUI();renderDays();};
   $("#bon_numduf").oninput=e=>{bonData().numduf=e.target.value;saveStore();};
+  $("#bon_import_week").onclick=bonImportWeek;
   [["bm_machine","materiel","machine"],["bm_plaque","materiel","plaque"],["bm_operateur","materiel","operateur"],["bm_accessoires","materiel","accessoires"],
    ["bc_client","chantier","client"],["bc_ref","chantier","ref"],["bc_adresse","chantier","adresse"],["bc_contact","chantier","contact"],["bc_tel","chantier","tel"]].forEach(([id,grp,key])=>{
     $("#"+id).oninput=e=>{bonData()[grp][key]=e.target.value;saveStore();};});
@@ -1588,7 +1602,7 @@ function bind(){
 
 // ---------- init ----------
 function init(){
-  loadIdentityUI();renderVehicleList();loadFraisProfileUI();initSignaturePads();loadSendUI();refreshWeekUI();renderDays();bind();
+  loadIdentityUI();renderVehicleList();loadFraisProfileUI();initSignaturePads();refreshWeekUI();renderDays();bind();
   if(!(store.identity.nom||store.identity.prenom||store.identity.adr1)){
     const cp=document.getElementById("card-profile");if(cp)cp.classList.add("open");}
   document.getElementById("recap_month_input").value=defaultMonth();
