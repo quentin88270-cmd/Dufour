@@ -425,7 +425,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="3.6";
+const APP_VERSION="3.8";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
@@ -499,7 +499,8 @@ function colA(){return {title:"A · Trajet domicile — ALLER",tag:"domicile →
   {t:"subttl",v:"Arrivée"},
   {t:"choice",label:"Lieu d'arrivée (chantier / dépôt)",opts:depotOpts("a_arr")},
   {t:"choice",label:"…ou arrivée domicile / hôtel (fin de journée → reporté sur le retour)",opts:E_ARR_OPTS,rerender:true},
-  {t:"time",label:"Heure d'arrivée",hh:"a_arr_h_hh",mm:"a_arr_h_mm"},
+  {t:"arrtimeA"},
+  {t:"roadpause",prefix:"a"},
   {t:"roadtime",prefix:"a"},
 ]};}
 function colBD(prefix,label){return {title:label,tag:"trajet pro",controls:[
@@ -510,6 +511,7 @@ function colBD(prefix,label){return {title:label,tag:"trajet pro",controls:[
   {t:"subttl",v:"Arrivée"},
   {t:"choice",label:"Lieu d'arrivée",opts:depotOpts(prefix+"_arr")},
   {t:"time",label:"Heure d'arrivée",hh:prefix+"_arr_h_hh",mm:prefix+"_arr_h_mm"},
+  {t:"roadpause",prefix:prefix},
   {t:"roadtime",prefix:prefix},
 ]};}
 function colE(){return {title:"E · Trajet domicile — RETOUR",tag:"travail → domicile",controls:[
@@ -520,6 +522,7 @@ function colE(){return {title:"E · Trajet domicile — RETOUR",tag:"travail →
   {t:"subttl",v:"Arrivée"},
   {t:"choice",label:"Lieu d'arrivée (synchronisé avec l'aller)",opts:E_ARR_OPTS,rerender:true},
   {t:"time",label:"Heure d'arrivée",hh:"e_arr_h_hh",mm:"e_arr_h_mm"},
+  {t:"roadpause",prefix:"e"},
   {t:"roadtime",prefix:"e"},
 ]};}
 function colC(){return {title:"C · Activité",tag:"cœur de journée",controls:[
@@ -626,15 +629,37 @@ function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   m=s.match(/^(\d{1,2})$/);if(m)return {hh:m[1],mm:""};
   return {hh:s,mm:""};
 }
-function roadMin(ds,prefix){const dep=tv(ds,prefix+"_dep_h"),arr=tv(ds,prefix+"_arr_h");
-  if(!dep||!arr)return null;let d=((+arr.hh)*60+(+arr.mm))-((+dep.hh)*60+(+dep.mm));if(d<0)d+=1440;return d;}
+function roadPauseMin(ds,prefix){const de=tv(ds,prefix+"_pause_de"),a=tv(ds,prefix+"_pause_a");
+  if(!de||!a)return 0;let d=((+a.hh)*60+(+a.mm))-((+de.hh)*60+(+de.mm));if(d<0)d+=1440;return d;}
+function workArrSel(ds){return !!(ds.a_arr_chantier||ds.a_arr_depot1||ds.a_arr_depot2||ds.a_arr_depot3||ds.a_arr_depot4||ds.a_arr_autre_chk);}
+function lodgeArrSel(ds){return !!(ds.e_arr_domicile||ds.e_arr_hotel_chk||ds.e_arr_autre_chk);}
+function arrBaseA(ds){if(workArrSel(ds))return "a_arr_h";if(lodgeArrSel(ds))return "e_arr_h";return "a_arr_h";}
+function roadMin(ds,prefix){const dep=tv(ds,prefix+"_dep_h");let arr=tv(ds,prefix+"_arr_h");
+  if(prefix==="a"&&!arr&&!tv(ds,"e_dep_h"))arr=tv(ds,"e_arr_h"); // journée transit : arrivée logement notée côté retour
+  if(!dep||!arr)return null;let d=((+arr.hh)*60+(+arr.mm))-((+dep.hh)*60+(+dep.mm));if(d<0)d+=1440;
+  d-=roadPauseMin(ds,prefix);if(d<0)d=0;return d;}
 function roadHM(m){if(m==null)return "—";return Math.floor(m/60)+"h"+two(m%60);}
 function renderRoadtime(ds,c,dayKey){const w=el("div","daytot");
-  w.innerHTML='<span>Temps de route</span>';
+  w.innerHTML='<span>Temps de route (pause déduite)</span>';
   const b=el("b");b.id="rt_"+dayKey+"_"+c.prefix;b.textContent=roadHM(roadMin(ds,c.prefix));
   w.appendChild(b);return w;}
 function updateRoadTimes(ds,dayKey){["a","b","d","e"].forEach(p=>{
   const b=document.getElementById("rt_"+dayKey+"_"+p);if(b)b.textContent=roadHM(roadMin(ds,p));});}
+function renderArrTimeA(ds,dayKey){const w=el("div");const base=arrBaseA(ds);
+  w.appendChild(el("label","fl","Heure d'arrivée"+(base==="e_arr_h"?" (hôtel/domicile → retour)":"")));
+  w.appendChild(timeInput(ds,base+"_hh",base+"_mm",dayKey));return w;}
+function roadPauseInput(ds,prefix,side,dayKey){const i=el("input");i.type="time";i.step="60";i.className="timepick";
+  const base=prefix+"_pause_"+side;
+  if(ds[base+"_hh"]!==undefined&&ds[base+"_hh"]!=="")i.value=two(parseInt(ds[base+"_hh"],10)||0)+":"+two(parseInt(ds[base+"_mm"]||"0",10)||0);
+  i.onchange=i.oninput=()=>{const v=i.value;if(!v){ds[base+"_hh"]="";ds[base+"_mm"]="";}
+    else{const p=v.split(":");ds[base+"_hh"]=String(parseInt(p[0],10)||0);ds[base+"_mm"]=two(parseInt(p[1]||"0",10)||0);}
+    if(dayKey)updateRoadTimes(ds,dayKey);markDirty();};
+  return i;}
+function renderRoadpause(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl","Pause sur la route (reportée en pause activité)"));
+  const row=el("div","row");
+  const a=el("div","col");a.appendChild(el("span","mini","De"));a.appendChild(roadPauseInput(ds,c.prefix,"de",dayKey));
+  const b=el("div","col");b.appendChild(el("span","mini","À"));b.appendChild(roadPauseInput(ds,c.prefix,"a",dayKey));
+  row.appendChild(a);row.appendChild(b);w.appendChild(row);return w;}
 function renderTime(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   w.appendChild(timeInput(ds,c.hh,c.mm,dayKey));return w;}
 function renderTime2(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
@@ -761,6 +786,8 @@ function renderControl(ds,c,dayKey){
     case "subttl":return el("div","subttl",c.v);
     case "choice":return renderChoice(ds,c);
     case "time":return renderTime(ds,c,dayKey);
+    case "arrtimeA":return renderArrTimeA(ds,dayKey);
+    case "roadpause":return renderRoadpause(ds,c,dayKey);
     case "roadtime":return renderRoadtime(ds,c,dayKey);
     case "time2":return renderTime2(ds,c,dayKey);
     case "pause":return renderPause(ds,c,dayKey);
@@ -850,8 +877,8 @@ function dayCalc(ds){
   const p1=rng(ds,"c_p1_de","c_p1_a")||0, p2=rng(ds,"c_p2_de","c_p2_a")||0;
   const inact=ds["c_inact_oui"]?(tod(ds,"c_inact")||0):0;
   const travail=(work==null)?null:Math.max(0,work-p1-p2-inact);
-  const pro=(rng(ds,"b_dep_h","b_arr_h")||0)+(rng(ds,"d_dep_h","d_arr_h")||0);
-  const dom=(rng(ds,"a_dep_h","a_arr_h")||0)+(rng(ds,"e_dep_h","e_arr_h")||0);
+  const pro=(roadMin(ds,"b")||0)+(roadMin(ds,"d")||0);
+  const dom=(roadMin(ds,"a")||0)+(roadMin(ds,"e")||0);
   const deps=[tod(ds,"a_dep_h"),tod(ds,"b_dep_h"),tod(ds,"c_deb")].filter(v=>v!=null);
   const arrs=[tod(ds,"e_arr_h"),tod(ds,"d_arr_h"),tod(ds,"c_fin")].filter(v=>v!=null);
   let amp=null;if(deps.length&&arrs.length){let d=Math.max(...arrs)-Math.min(...deps);if(d<0)d+=1440;amp=d;}
@@ -1480,6 +1507,13 @@ async function buildPDF(){
     if(colUsed(ds0,"d"))applyV("d_dep");
     const actUsed=ds0["c_travail_chk"]||ds0["c_autre_chk"]||(ds0["c_deb_hh"]!==undefined&&ds0["c_deb_hh"]!=="");
     if(actUsed){if(v.machine&&!ds["c_machine"])ds["c_machine"]=v.machine;if(v.plaque&&!ds["c_plaque"])ds["c_plaque"]=v.plaque;}
+    // reporter les pauses sur la route dans les créneaux "pause activité" libres
+    const roadPauses=[];
+    ["a","b","d","e"].forEach(p=>{if((ds0[p+"_pause_de_hh"]!==undefined&&ds0[p+"_pause_de_hh"]!=="")||(ds0[p+"_pause_a_hh"]!==undefined&&ds0[p+"_pause_a_hh"]!==""))
+      roadPauses.push([ds0[p+"_pause_de_hh"],ds0[p+"_pause_de_mm"],ds0[p+"_pause_a_hh"],ds0[p+"_pause_a_mm"]]);});
+    [["c_p1_de_hh","c_p1_de_mm","c_p1_a_hh","c_p1_a_mm"],["c_p2_de_hh","c_p2_de_mm","c_p2_a_hh","c_p2_a_mm"]].forEach(slot=>{
+      if(roadPauses.length && (ds[slot[0]]===undefined||ds[slot[0]]==="")){const r=roadPauses.shift();
+        ds[slot[0]]=r[0];ds[slot[1]]=r[1];ds[slot[2]]=r[2];ds[slot[3]]=r[3];}});
     // date d/m/y
     drawTextAt(rmap.date_d,two(dt.getDate()),9);
     drawTextAt(rmap.date_m,two(dt.getMonth()+1),9);
