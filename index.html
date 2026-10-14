@@ -425,7 +425,7 @@ const PH=841.89, PW=595.28;
 const DAYS=[["lundi","Lundi"],["mardi","Mardi"],["mercredi","Mercredi"],["jeudi","Jeudi"],
             ["vendredi","Vendredi"],["samedi","Samedi"],["dimanche","Dimanche"]];
 const LS_KEY="fdp_dcl_v1";
-const APP_VERSION="3.4";
+const APP_VERSION="3.6";
 const DEFAULT_ID={nom:"",prenom:"",adr1:"",adr2:""};
 
 // ---------- storage ----------
@@ -485,6 +485,9 @@ function travelDepart(prefix,firstOpts){
   return {kind:"depblock",prefix:prefix,depOpts:firstOpts};
 }
 // Column builders return {title, tag, controls:[...]}
+var E_ARR_OPTS=[{label:"Domicile",chk:"e_arr_domicile"},
+  {label:"Hôtel / gîte…",chk:"e_arr_hotel_chk",txt:"e_arr_hotel_txt"},
+  {label:"Autre…",chk:"e_arr_autre_chk",txt:"e_arr_autre_txt"}];
 function colA(){return {title:"A · Trajet domicile — ALLER",tag:"domicile → travail",controls:[
   {t:"subttl",v:"Départ"},
   {t:"choice",label:"Lieu de départ",opts:[
@@ -494,8 +497,10 @@ function colA(){return {title:"A · Trajet domicile — ALLER",tag:"domicile →
   {t:"time",label:"Heure de départ",hh:"a_dep_h_hh",mm:"a_dep_h_mm"},
   {t:"veh",prefix:"a_dep"},
   {t:"subttl",v:"Arrivée"},
-  {t:"choice",label:"Lieu d'arrivée",opts:depotOpts("a_arr")},
+  {t:"choice",label:"Lieu d'arrivée (chantier / dépôt)",opts:depotOpts("a_arr")},
+  {t:"choice",label:"…ou arrivée domicile / hôtel (fin de journée → reporté sur le retour)",opts:E_ARR_OPTS,rerender:true},
   {t:"time",label:"Heure d'arrivée",hh:"a_arr_h_hh",mm:"a_arr_h_mm"},
+  {t:"roadtime",prefix:"a"},
 ]};}
 function colBD(prefix,label){return {title:label,tag:"trajet pro",controls:[
   {t:"subttl",v:"Départ"},
@@ -505,6 +510,7 @@ function colBD(prefix,label){return {title:label,tag:"trajet pro",controls:[
   {t:"subttl",v:"Arrivée"},
   {t:"choice",label:"Lieu d'arrivée",opts:depotOpts(prefix+"_arr")},
   {t:"time",label:"Heure d'arrivée",hh:prefix+"_arr_h_hh",mm:prefix+"_arr_h_mm"},
+  {t:"roadtime",prefix:prefix},
 ]};}
 function colE(){return {title:"E · Trajet domicile — RETOUR",tag:"travail → domicile",controls:[
   {t:"subttl",v:"Départ"},
@@ -512,11 +518,9 @@ function colE(){return {title:"E · Trajet domicile — RETOUR",tag:"travail →
   {t:"time",label:"Heure de départ",hh:"e_dep_h_hh",mm:"e_dep_h_mm"},
   {t:"veh",prefix:"e_dep"},
   {t:"subttl",v:"Arrivée"},
-  {t:"choice",label:"Lieu d'arrivée",opts:[
-    {label:"Domicile",chk:"e_arr_domicile"},
-    {label:"Hôtel / gîte…",chk:"e_arr_hotel_chk",txt:"e_arr_hotel_txt"},
-    {label:"Autre…",chk:"e_arr_autre_chk",txt:"e_arr_autre_txt"}]},
+  {t:"choice",label:"Lieu d'arrivée (synchronisé avec l'aller)",opts:E_ARR_OPTS,rerender:true},
   {t:"time",label:"Heure d'arrivée",hh:"e_arr_h_hh",mm:"e_arr_h_mm"},
+  {t:"roadtime",prefix:"e"},
 ]};}
 function colC(){return {title:"C · Activité",tag:"cœur de journée",controls:[
   {t:"time2",label:"Horaire d'activité",dhh:"c_deb_hh",dmm:"c_deb_mm",fhh:"c_fin_hh",fmm:"c_fin_mm"},
@@ -558,7 +562,8 @@ function renderChoice(ds,c){
   const txt=el("input");txt.type="text";txt.placeholder="Préciser…";txt.style.marginTop="6px";
   function syncTxt(){const i=sel.value===""?-1:+sel.value;const o=i>=0?c.opts[i]:null;
     if(o&&o.txt){txt.style.display="";txt.value=ds[o.txt]||"";}else{txt.style.display="none";}}
-  sel.onchange=()=>{const i=sel.value===""?-1:+sel.value;setChoice(ds,c.opts,i);syncTxt();markDirty();};
+  sel.onchange=()=>{const i=sel.value===""?-1:+sel.value;setChoice(ds,c.opts,i);
+    syncTxt();markDirty();if(c.rerender)renderDays();};
   txt.oninput=()=>{const i=sel.value===""?-1:+sel.value;const o=i>=0?c.opts[i]:null;if(o&&o.txt){ds[o.txt]=txt.value;markDirty();}};
   syncTxt();
   wrap.appendChild(sel);wrap.appendChild(txt);
@@ -577,6 +582,7 @@ function timeInput(ds,hhRole,mmRole,dayKey){
     if(!val){ds[hhRole]="";ds[mmRole]="";}
     else{const p=val.split(":");ds[hhRole]=String(parseInt(p[0],10)||0);ds[mmRole]=two(parseInt(p[1]||"0",10)||0);}
     linkAfterChange(ds,dayKey,base);
+    if(dayKey)updateRoadTimes(ds,dayKey);
     markDirty();};
   i.onchange=apply;i.oninput=apply;
   w.appendChild(i);
@@ -620,6 +626,15 @@ function parseTime(s){s=(s||"").trim();if(!s)return {hh:"",mm:""};
   m=s.match(/^(\d{1,2})$/);if(m)return {hh:m[1],mm:""};
   return {hh:s,mm:""};
 }
+function roadMin(ds,prefix){const dep=tv(ds,prefix+"_dep_h"),arr=tv(ds,prefix+"_arr_h");
+  if(!dep||!arr)return null;let d=((+arr.hh)*60+(+arr.mm))-((+dep.hh)*60+(+dep.mm));if(d<0)d+=1440;return d;}
+function roadHM(m){if(m==null)return "—";return Math.floor(m/60)+"h"+two(m%60);}
+function renderRoadtime(ds,c,dayKey){const w=el("div","daytot");
+  w.innerHTML='<span>Temps de route</span>';
+  const b=el("b");b.id="rt_"+dayKey+"_"+c.prefix;b.textContent=roadHM(roadMin(ds,c.prefix));
+  w.appendChild(b);return w;}
+function updateRoadTimes(ds,dayKey){["a","b","d","e"].forEach(p=>{
+  const b=document.getElementById("rt_"+dayKey+"_"+p);if(b)b.textContent=roadHM(roadMin(ds,p));});}
 function renderTime(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
   w.appendChild(timeInput(ds,c.hh,c.mm,dayKey));return w;}
 function renderTime2(ds,c,dayKey){const w=el("div");w.appendChild(el("label","fl",c.label));
@@ -746,6 +761,7 @@ function renderControl(ds,c,dayKey){
     case "subttl":return el("div","subttl",c.v);
     case "choice":return renderChoice(ds,c);
     case "time":return renderTime(ds,c,dayKey);
+    case "roadtime":return renderRoadtime(ds,c,dayKey);
     case "time2":return renderTime2(ds,c,dayKey);
     case "pause":return renderPause(ds,c,dayKey);
     case "veh":return renderVeh(ds,c);
